@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const channelIcons = {
+const channelIcons: { [key in Broadcast['channels'][number]]: React.ReactNode } = {
   Email: <Mail className="w-4 h-4" />,
   WhatsApp: <Icons.whatsApp className="w-4 h-4" />,
   Push: <Bell className="w-4 h-4" />,
@@ -53,7 +53,7 @@ export default function BroadcastPage() {
               <div className="grid gap-2">
                 <Label>Canais</Label>
                 <div className="flex items-center gap-4">
-                  {(['Email', 'WhatsApp', 'Push'] as const).map((channel) => (
+                  {(Object.keys(channelIcons) as Array<keyof typeof channelIcons>).map((channel) => (
                     <div key={channel} className="flex items-center space-x-2">
                        <Checkbox id={`channel-${channel}`} />
                        <Label htmlFor={`channel-${channel}`} className="flex items-center gap-2 font-normal">
@@ -109,7 +109,7 @@ export default function BroadcastPage() {
                   <TableCell>
                     <div className="flex items-center gap-2">
                       {broadcast.channels.map(channel => (
-                        <div key={channel} className="flex items-center gap-1">
+                        <div key={channel} className="flex items-center gap-1" title={channel}>
                           {channelIcons[channel]}
                         </div>
                       ))}
