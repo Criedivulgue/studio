@@ -1,4 +1,10 @@
-import type { Contact, Broadcast, ChatSession } from "./types";
+import type { Contact, Broadcast, ChatSession, User } from "./types";
+
+export const usersData: User[] = [
+    { id: 'super-admin', name: 'Super Admin', email: 'admin@omniflow.ai', role: 'Super Admin', avatar: 'https://picsum.photos/seed/admin/40/40' },
+    { id: 'admin-vendas', name: 'Admin Vendas', email: 'vendas@omniflow.ai', role: 'Admin', avatar: 'https://picsum.photos/seed/admin-vendas/40/40' },
+    { id: 'admin-suporte', name: 'Admin Suporte', email: 'suporte@omniflow.ai', role: 'Admin', avatar: 'https://picsum.photos/seed/admin-suporte/40/40' }
+]
 
 export const contactsData: Contact[] = [
   { id: '1', name: 'Alice Johnson', email: 'alice@example.com', phone: '123-456-7890', group: 'VIP', avatar: '/avatars/01.png', ownerId: 'super-admin' },

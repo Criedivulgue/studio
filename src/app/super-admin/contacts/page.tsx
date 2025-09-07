@@ -1,11 +1,12 @@
 import Image from "next/image";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/componentsui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { contactsData } from "@/lib/data";
-import { MoreHorizontal, Upload, Download, Search, Phone, MessageSquare } from "lucide-react";
+import { contactsData, usersData } from "@/lib/data";
+import { MoreHorizontal, Upload, Download, Search, Phone, MessageSquare, Link2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -13,7 +14,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 export default function SuperAdminContactsPage() {
   
   // O Super Admin vê todos os contatos.
-  const filteredContacts = contactsData;
+  const allContacts = contactsData;
+  const allUsers = usersData;
+
+  const getUserById = (id: string) => allUsers.find(u => u.id === id);
 
   return (
     <div className="space-y-6">
@@ -59,15 +63,16 @@ export default function SuperAdminContactsPage() {
                 </TableHead>
                 <TableHead>Nome</TableHead>
                 <TableHead>Email</TableHead>
-                <TableHead>Telefone</TableHead>
                 <TableHead>Grupo</TableHead>
                 <TableHead>Proprietário</TableHead>
-                <TableHead>Suporte</TableHead>
+                <TableHead>Link do Chat</TableHead>
                 <TableHead><span className="sr-only">Ações</span></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredContacts.map((contact) => (
+              {allContacts.map((contact) => {
+                const owner = getUserById(contact.ownerId);
+                return (
                 <TableRow key={contact.id}>
                   <TableCell>
                     <Checkbox />
@@ -82,22 +87,19 @@ export default function SuperAdminContactsPage() {
                     </div>
                   </TableCell>
                   <TableCell>{contact.email}</TableCell>
-                  <TableCell>{contact.phone}</TableCell>
                   <TableCell>
                     <Badge variant="secondary">{contact.group}</Badge>
                   </TableCell>
                   <TableCell>
-                      <Badge variant="outline">{contact.ownerId}</Badge>
+                      <Badge variant="outline">{owner?.name || contact.ownerId}</Badge>
                   </TableCell>
                   <TableCell>
-                    <div className="flex gap-2">
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MessageSquare className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <Phone className="h-4 w-4" />
-                        </Button>
-                    </div>
+                     <Button variant="ghost" size="sm" asChild>
+                        <Link href={`/chat/${contact.ownerId}`} target="_blank">
+                           <Link2 className="mr-2 h-4 w-4" />
+                           /chat/{contact.ownerId}
+                        </Link>
+                     </Button>
                   </TableCell>
                   <TableCell>
                     <DropdownMenu>
@@ -116,7 +118,7 @@ export default function SuperAdminContactsPage() {
                     </DropdownMenu>
                   </TableCell>
                 </TableRow>
-              ))}
+              )})}
             </TableBody>
           </Table>
         </CardContent>

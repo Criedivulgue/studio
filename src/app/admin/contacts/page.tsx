@@ -1,11 +1,12 @@
 import Image from "next/image";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { contactsData } from "@/lib/data";
-import { MoreHorizontal, Upload, Download, Search, Phone, MessageSquare } from "lucide-react";
+import { MoreHorizontal, Upload, Download, Search, Phone, MessageSquare, Link2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -24,7 +25,10 @@ export default function ContactsPage() {
         <header className="space-y-1.5">
           <h1 className="text-2xl font-headline font-semibold">Meus Contatos</h1>
           <p className="text-muted-foreground">
-            Gerencie sua base de clientes.
+            Gerencie sua base de clientes. O link de chat para seus clientes é: 
+            <Button variant="link" asChild className="p-1 -ml-1">
+              <Link href={`/chat/${loggedInUserId}`} target="_blank">/chat/{loggedInUserId}</Link>
+            </Button>
           </p>
         </header>
         <div className="flex items-center gap-2">

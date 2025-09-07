@@ -9,9 +9,9 @@
  *
  * ## 1. Super Administrador (Dono do Shopping)
  * - **Descrição**: É o "Dono" ou "Gerente Geral" do sistema. Ele tem acesso e controle total sobre o aplicativo.
- * - **Acesso**: Acessa um painel de controle global (ex: `/super-admin-dashboard`).
+ * - **Acesso**: Acessa um painel de controle global (ex: `/super-admin/*`).
  * - **Responsabilidades**:
- *   - Gerencia todos os outros usuários (Administradores, Parceiros, etc.).
+ *   - Gerencia todos os outros usuários (Administradores).
  *   - Visualiza e gerencia **todos** os contatos de **todos** os administradores no sistema.
  *   - Configura a IA "pública" ou global.
  *   - Cria e envia transmissões (broadcasts) para todos os usuários ou segmentos.
@@ -19,7 +19,7 @@
  *
  * ## 2. Administrador Comum (Dono de Loja)
  * - **Descrição**: É um "Vendedor" ou "Atendente". Ele tem uma visão restrita, focada apenas em seus próprios recursos.
- * - **Acesso**: Acessa um painel de controle individual (ex: `/admin-dashboard`).
+ * - **Acesso**: Acessa um painel de controle individual (ex: `/admin/*`).
  * - **Responsabilidades**:
  *   - Gerencia **apenas** sua própria lista de contatos/clientes. Não pode ver os contatos de outros administradores.
  *   - Configura sua própria "persona" de IA para atender seus contatos.
@@ -27,9 +27,18 @@
  *
  * ## 3. Usuário Final (Cliente)
  * - **Descrição**: Um cliente ou visitante externo que interage com o assistente de IA.
- * - **Acesso**: Acessa as páginas de chat públicas (ex: `/chat/id-do-admin`).
+ * - **Acesso**: Acessa as páginas de chat públicas (ex: `/chat/id-do-admin`). Não possui login.
  * - **Responsabilidades**: Conversar com a IA para obter suporte ou informações.
  */
+
+export type User = {
+    id: string;
+    name: string;
+    email: string;
+    role: 'Super Admin' | 'Admin';
+    avatar: string;
+}
+
 export type Contact = {
   id: string;
   name: string;
