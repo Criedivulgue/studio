@@ -17,16 +17,18 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
-import { LayoutDashboard, Users, Bot, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, Users, Send, Bot, Settings, LogOut, Contact } from "lucide-react";
 
-// Navegação para o Administrador Comum
+// Navegação para o Super Administrador
 const navItems = [
-  { href: "/admin/dashboard", icon: LayoutDashboard, label: "Painel" },
-  { href: "/admin/contacts", icon: Users, label: "Contatos" },
-  { href: "/admin/ai-config", icon: Bot, label: "Config IA" },
+  { href: "/super-admin/dashboard", icon: LayoutDashboard, label: "Painel Global" },
+  { href: "/super-admin/users", icon: Users, label: "Usuários" },
+  { href: "/super-admin/contacts", icon: Contact, label: "Todos Contatos" },
+  { href: "/super-admin/broadcast", icon: Send, label: "Transmissões" },
+  { href: "/super-admin/ai-config", icon: Bot, label: "Config IA Global" },
 ];
 
-export default function AdminLayout({
+export default function SuperAdminLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -67,14 +69,14 @@ export default function AdminLayout({
           </div>
           <div className="flex items-center gap-3">
             <Avatar>
-              <AvatarImage src="https://picsum.photos/seed/admin-vendas/40/40" data-ai-hint="profile picture" />
-              <AvatarFallback>AD</AvatarFallback>
+              <AvatarImage src="https://picsum.photos/seed/admin/40/40" data-ai-hint="profile picture" />
+              <AvatarFallback>SA</AvatarFallback>
             </Avatar>
             <div className="flex-1 overflow-hidden">
-                <p className="text-sm font-medium text-sidebar-foreground truncate">Administrador</p>
-                <p className="text-xs text-sidebar-foreground/70 truncate">vendas@omniflow.ai</p>
+                <p className="text-sm font-medium text-sidebar-foreground truncate">Super Admin</p>
+                <p className="text-xs text-sidebar-foreground/70 truncate">admin@omniflow.ai</p>
             </div>
-            <Button asChild variant="ghost" size="icon" className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex-shrink-0">
+             <Button asChild variant="ghost" size="icon" className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex-shrink-0">
                 <Link href="/login"><LogOut className="w-4 h-4"/></Link>
             </Button>
           </div>

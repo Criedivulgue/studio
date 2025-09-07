@@ -1,7 +1,7 @@
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/componentsui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { contactsData } from "@/lib/data";
@@ -10,21 +10,18 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-// Simulação do ID do usuário logado. No futuro, isso virá de um sistema de autenticação.
-const loggedInUserId = 'admin-vendas'; 
-
-export default function ContactsPage() {
+export default function SuperAdminContactsPage() {
   
-  // Filtra os contatos para mostrar apenas os que pertencem ao admin logado.
-  const filteredContacts = contactsData.filter(c => c.ownerId === loggedInUserId);
+  // O Super Admin vê todos os contatos.
+  const filteredContacts = contactsData;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <header className="space-y-1.5">
-          <h1 className="text-2xl font-headline font-semibold">Meus Contatos</h1>
+          <h1 className="text-2xl font-headline font-semibold">Todos os Contatos</h1>
           <p className="text-muted-foreground">
-            Gerencie sua base de clientes.
+            Gerencie toda a base de usuários do sistema.
           </p>
         </header>
         <div className="flex items-center gap-2">
@@ -42,9 +39,9 @@ export default function ContactsPage() {
         <CardHeader>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-              <CardTitle className="font-headline">Meus Contatos</CardTitle>
+              <CardTitle className="font-headline">Contatos do Sistema</CardTitle>
               <CardDescription>
-                Uma lista dos seus contatos atribuídos.
+                Visão geral de todos os contatos no sistema.
               </CardDescription>
             </div>
             <div className="relative">
@@ -64,6 +61,7 @@ export default function ContactsPage() {
                 <TableHead>Email</TableHead>
                 <TableHead>Telefone</TableHead>
                 <TableHead>Grupo</TableHead>
+                <TableHead>Proprietário</TableHead>
                 <TableHead>Suporte</TableHead>
                 <TableHead><span className="sr-only">Ações</span></TableHead>
               </TableRow>
@@ -89,6 +87,9 @@ export default function ContactsPage() {
                     <Badge variant="secondary">{contact.group}</Badge>
                   </TableCell>
                   <TableCell>
+                      <Badge variant="outline">{contact.ownerId}</Badge>
+                  </TableCell>
+                  <TableCell>
                     <div className="flex gap-2">
                         <Button variant="ghost" size="icon" className="h-8 w-8">
                             <MessageSquare className="h-4 w-4" />
@@ -109,6 +110,7 @@ export default function ContactsPage() {
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem>Editar</DropdownMenuItem>
                         <DropdownMenuItem>Ver Detalhes</DropdownMenuItem>
+                        <DropdownMenuItem>Reatribuir</DropdownMenuItem>
                         <DropdownMenuItem className="text-destructive">Excluir</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
