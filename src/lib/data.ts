@@ -17,7 +17,7 @@ export const contactsData: Contact[] = [
 
 export const broadcastData: Broadcast[] = [
   { id: 'b1', message: '🎉 Alerta de Novo Recurso: Agora você pode personalizar seu assistente de IA!', channels: ['Email', 'Push'], target: 'Todos os Usuários', status: 'Enviada', date: '2024-05-10' },
-  { id: 'b2', message: 'Ganhe 20% de desconto em todos os planos premium. Oferta por tempo limitado!', channels: ['Email', 'WhatsApp'], target: 'Novo Usuário', status: 'Enviada', date: '2024-05-08' },
+  { id: 'b2', message: 'Ganhe 20% de desconto em todos os planos premium. Oferta por tempo limitado!', channels: ['Email'], target: 'Novo Usuário', status: 'Enviada', date: '2024-05-08' },
   { id: 'b3', message: 'Manutenção agendada para este domingo às 2h.', channels: ['Push'], target: 'Todos os Usuários', status: 'Agendada', date: '2024-05-15' },
   { id: 'b4', message: 'Bem-vindo ao OmniFlow AI! Estamos aqui para ajudar você.', channels: ['Email'], target: 'Novo Usuário', status: 'Rascunho', date: '2024-05-20' },
 ];

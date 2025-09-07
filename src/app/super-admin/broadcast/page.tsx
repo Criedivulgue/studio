@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { broadcastData } from "@/lib/data";
 import type { Broadcast } from "@/lib/types";
 import { MoreHorizontal, PlusCircle, Mail, Bell } from "lucide-react";
-import { Icons } from "@/components/icons";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,7 +16,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 const channelIcons: { [key in Broadcast['channels'][number]]: React.ReactNode } = {
   Email: <Mail className="w-4 h-4" />,
-  WhatsApp: <Icons.whatsApp className="w-4 h-4" />,
   Push: <Bell className="w-4 h-4" />,
 };
 

@@ -1,15 +1,18 @@
 /**
  * @fileoverview
  * Este arquivo define os tipos de dados centrais usados em toda a aplicação OmniFlow AI.
+ * Ele formaliza os papéis de usuário e as estruturas de dados para garantir consistência
+ * e permissões corretas em todo o sistema.
  */
 
 /**
  * # Tipos de Usuário na Aplicação
- * A aplicação distingue três papéis de usuário principais:
+ * A aplicação distingue dois papéis de usuário principais, cada um com acesso e
+ * responsabilidades distintas, modelados pela analogia de um "Shopping Center".
  *
  * ## 1. Super Administrador (Dono do Shopping)
  * - **Descrição**: É o "Dono" ou "Gerente Geral" do sistema. Ele tem acesso e controle total sobre o aplicativo.
- * - **Acesso**: Acessa um painel de controle global (ex: `/super-admin/*`).
+ * - **Acesso**: Acessa um painel de controle global (`/super-admin/*`).
  * - **Responsabilidades**:
  *   - Gerencia todos os outros usuários (Administradores).
  *   - Visualiza e gerencia **todos** os contatos de **todos** os administradores no sistema.
@@ -19,7 +22,7 @@
  *
  * ## 2. Administrador Comum (Dono de Loja)
  * - **Descrição**: É um "Vendedor" ou "Atendente". Ele tem uma visão restrita, focada apenas em seus próprios recursos.
- * - **Acesso**: Acessa um painel de controle individual (ex: `/admin/*`).
+ * - **Acesso**: Acessa um painel de controle individual (`/admin/*`).
  * - **Responsabilidades**:
  *   - Gerencia **apenas** sua própria lista de contatos/clientes. Não pode ver os contatos de outros administradores.
  *   - Configura sua própria "persona" de IA para atender seus contatos.
@@ -52,7 +55,7 @@ export type Contact = {
 export type Broadcast = {
   id: string;
   message: string;
-  channels: ('Email' | 'WhatsApp' | 'Push')[];
+  channels: ('Email' | 'Push')[];
   target: 'Todos os Usuários' | 'Novo Usuário' | 'VIP' | 'Ativo' | 'Inativo';
   status: 'Enviada' | 'Agendada' | 'Rascunho' | 'Falhou';
   date: string;

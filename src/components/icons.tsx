@@ -1,5 +1,7 @@
 import type { SVGProps } from "react";
 
+// This component is no longer used in the broadcast page, 
+// but we can keep it for potential future use or other parts of the app.
 export function WhatsAppIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg
