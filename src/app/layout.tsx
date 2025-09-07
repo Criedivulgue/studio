@@ -1,6 +1,7 @@
 import type {Metadata} from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
+import { ChatWidget } from '@/components/chat-widget';
 
 export const metadata: Metadata = {
   title: 'OmniFlow AI',
@@ -21,6 +22,7 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         {children}
+        <ChatWidget adminUid="super-admin" />
         <Toaster />
       </body>
     </html>
