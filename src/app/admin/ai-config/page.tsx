@@ -17,9 +17,9 @@ export default function AiConfigPage() {
       </header>
       <Card>
         <CardHeader>
-          <CardTitle className="font-headline">Configurações do Assistente</CardTitle>
+          <CardTitle className="font-headline">Configurações do Seu Assistente</CardTitle>
           <CardDescription>
-            Essas configurações se aplicam apenas a chats iniciados por meio de seu link de administrador exclusivo.
+            Estas configurações se aplicam apenas aos chats iniciados através do seu link de atendimento exclusivo.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -36,7 +36,7 @@ export default function AiConfigPage() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="custom-instructions" className="font-semibold">
-              Instruções Personalizadas
+              Suas Instruções Personalizadas
             </Label>
             <Textarea
               id="custom-instructions"
@@ -44,7 +44,7 @@ export default function AiConfigPage() {
               className="min-h-[120px]"
             />
             <p className="text-sm text-muted-foreground">
-              Forneça diretrizes ou contexto específicos para seu assistente de IA. Isso será incluído em cada prompt.
+              Forneça diretrizes ou contexto específicos para o seu assistente de IA. Isso será incluído em cada prompt para seus clientes.
             </p>
           </div>
         </CardContent>

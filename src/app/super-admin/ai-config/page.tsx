@@ -12,14 +12,14 @@ export default function AiConfigPage() {
       <header className="space-y-1.5">
         <h1 className="text-2xl font-headline font-semibold">Configuração da IA Global</h1>
         <p className="text-muted-foreground">
-          Personalize o comportamento e o estilo de resposta da IA padrão.
+          Personalize o comportamento e o estilo de resposta da IA padrão do sistema.
         </p>
       </header>
       <Card>
         <CardHeader>
           <CardTitle className="font-headline">Configurações da IA Padrão</CardTitle>
           <CardDescription>
-            Essas configurações se aplicam a todos os chats que não possuem um administrador específico.
+            Estas configurações se aplicam a todos os chats que não possuem um administrador específico (por exemplo, o link de chat público ou de demonstração).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
