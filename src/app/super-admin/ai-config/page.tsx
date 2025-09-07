@@ -23,6 +23,17 @@ export default function AiConfigPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          <div className="flex items-center space-x-4 rounded-md border p-4">
+            <div className="flex-1 space-y-1">
+              <Label htmlFor="use-custom-info" className="font-semibold">
+                Usar Informações Personalizadas do Usuário
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                Permita que a IA use informações personalizadas para produzir melhores conversas de suporte.
+              </p>
+            </div>
+            <Switch id="use-custom-info" defaultChecked />
+          </div>
           <div className="space-y-2">
             <Label htmlFor="custom-instructions" className="font-semibold">
               Instruções Globais
