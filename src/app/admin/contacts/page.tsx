@@ -1,3 +1,5 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -6,7 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { contactsData } from "@/lib/data";
-import { MoreHorizontal, Upload, Download, Search, Phone, MessageSquare, Link2 } from "lucide-react";
+import { MoreHorizontal, Upload, Download, Search, Phone, MessageSquare } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -94,11 +96,11 @@ export default function ContactsPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-2">
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MessageSquare className="h-4 w-4" />
+                        <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+                           <Link href={`/chat/${contact.ownerId}`} target="_blank"><MessageSquare className="h-4 w-4" /></Link>
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <Phone className="h-4 w-4" />
+                        <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+                           <a href={`tel:${contact.phone}`}><Phone className="h-4 w-4" /></a>
                         </Button>
                     </div>
                   </TableCell>

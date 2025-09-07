@@ -17,7 +17,6 @@
  *   - Gerencia todos os outros usuários (Administradores).
  *   - Visualiza e gerencia **todos** os contatos de **todos** os administradores no sistema.
  *   - Configura a IA "pública" ou global.
- *   - Cria e envia transmissões (broadcasts) para todos os usuários ou segmentos.
  *   - Atua também como um Administrador Comum para sua própria lista de contatos.
  *
  * ## 2. Administrador Comum (Dono de Loja)
@@ -50,15 +49,6 @@ export type Contact = {
   group: 'VIP' | 'Novo Usuário' | 'Ativo' | 'Inativo';
   avatar: string;
   ownerId: string; // ID do administrador que é 'dono' do contato
-};
-
-export type Broadcast = {
-  id: string;
-  message: string;
-  channels: ('Email' | 'Push')[];
-  target: 'Todos os Usuários' | 'Novo Usuário' | 'VIP' | 'Ativo' | 'Inativo';
-  status: 'Enviada' | 'Agendada' | 'Rascunho' | 'Falhou';
-  date: string;
 };
 
 export type ChatSession = {

@@ -17,13 +17,12 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
-import { Users, Send, Bot, Settings, LogOut, Contact } from "lucide-react";
+import { Users, Bot, Settings, LogOut, Contact } from "lucide-react";
 
 // Navegação para o Super Administrador
 const navItems = [
   { href: "/super-admin/contacts", icon: Contact, label: "Todos Contatos" },
   { href: "/super-admin/users", icon: Users, label: "Usuários" },
-  { href: "/super-admin/broadcast", icon: Send, label: "Transmissões" },
   { href: "/super-admin/ai-config", icon: Bot, label: "Config IA Global" },
 ];
 
