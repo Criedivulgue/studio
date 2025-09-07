@@ -1,9 +1,17 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Permite leitura e escrita apenas se o usuário estiver autenticado.
-    // Esta é uma regra de segurança básica para proteger contra acesso não autorizado.
-    // Futuramente, podemos refinar isso para regras baseadas em papéis de usuário.
+  
+    // Permite que qualquer um crie uma conta (cadastro),
+    // mas apenas o usuário autenticado pode ler/modificar seus próprios dados.
+    match /users/{userId} {
+      allow create;
+      allow read, update, delete: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Para todas as outras coleções, como 'ai-configs',
+    // exige que o usuário esteja autenticado para qualquer operação.
     match /{document=**} {
       allow read, write: if request.auth != null;
     }
