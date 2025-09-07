@@ -5,25 +5,30 @@
 
 /**
  * # Tipos de Usuário na Aplicação
- *
  * A aplicação distingue três papéis de usuário principais:
  *
- * 1.  **Super Administrador**:
- *     - **Descrição**: O usuário de nível mais alto com controle total sobre o aplicativo.
- *     - **Acesso**: Acessa o painel de administração (`/admin/*`) e pode ver/gerenciar todos os dados.
- *     - **Responsabilidades**: Gerenciar outros administradores, supervisionar todos os contatos e chats,
- *       configurar configurações globais do aplicativo.
+ * ## 1. Super Administrador (Dono do Shopping)
+ * - **Descrição**: É o "Dono" ou "Gerente Geral" do sistema. Ele tem acesso e controle total sobre o aplicativo.
+ * - **Acesso**: Acessa um painel de controle global (ex: `/super-admin-dashboard`).
+ * - **Responsabilidades**:
+ *   - Gerencia todos os outros usuários (Administradores, Parceiros, etc.).
+ *   - Visualiza e gerencia **todos** os contatos de **todos** os administradores no sistema.
+ *   - Configura a IA "pública" ou global.
+ *   - Cria e envia transmissões (broadcasts) para todos os usuários ou segmentos.
+ *   - Atua também como um Administrador Comum para sua própria lista de contatos.
  *
- * 2.  **Administrador**:
- *     - **Descrição**: Um usuário interno com permissões limitadas para gerenciar seus próprios recursos.
- *     - **Acesso**: Acessa o painel de administração (`/admin/*`), mas sua visão é restrita.
- *     - **Responsabilidades**: Gerenciar apenas seus próprios contatos e interagir com os chats
- *       associados a eles. Não pode ver os contatos de outros administradores.
+ * ## 2. Administrador Comum (Dono de Loja)
+ * - **Descrição**: É um "Vendedor" ou "Atendente". Ele tem uma visão restrita, focada apenas em seus próprios recursos.
+ * - **Acesso**: Acessa um painel de controle individual (ex: `/admin-dashboard`).
+ * - **Responsabilidades**:
+ *   - Gerencia **apenas** sua própria lista de contatos/clientes. Não pode ver os contatos de outros administradores.
+ *   - Configura sua própria "persona" de IA para atender seus contatos.
+ *   - O link de atendimento para seus clientes é único (ex: `dominio.com/chat/{seu-id-de-admin}`).
  *
- * 3.  **Usuário Final (Cliente)**:
- *     - **Descrição**: Um cliente ou visitante externo que interage com o assistente de IA.
- *     - **Acesso**: Acessa as páginas de chat públicas (ex: `/chat/nome-do-admin`).
- *     - **Responsabilidades**: Conversar com a IA para obter suporte ou informações.
+ * ## 3. Usuário Final (Cliente)
+ * - **Descrição**: Um cliente ou visitante externo que interage com o assistente de IA.
+ * - **Acesso**: Acessa as páginas de chat públicas (ex: `/chat/id-do-admin`).
+ * - **Responsabilidades**: Conversar com a IA para obter suporte ou informações.
  */
 export type Contact = {
   id: string;
