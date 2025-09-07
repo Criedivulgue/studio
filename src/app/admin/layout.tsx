@@ -1,6 +1,6 @@
 "use client"
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   SidebarProvider,
@@ -18,6 +18,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
 import { LayoutDashboard, Users, Bot, Settings, LogOut, MessageSquare, Contact, History } from "lucide-react";
+import { logout } from "@/services/authService";
+import { useToast } from "@/hooks/use-toast";
+
 
 // Navegação para o Administrador Comum
 const navItems = [
@@ -34,6 +37,25 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { toast } = useToast();
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      toast({
+        title: "Logout realizado com sucesso!",
+        description: "Você será redirecionado para a página de login.",
+      });
+      router.push("/login");
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao fazer logout",
+        description: "Não foi possível deslogar. Tente novamente.",
+      });
+    }
+  };
 
   return (
     <SidebarProvider>
@@ -76,8 +98,8 @@ export default function AdminLayout({
                 <p className="text-sm font-medium text-sidebar-foreground truncate">Administrador</p>
                 <p className="text-xs text-sidebar-foreground/70 truncate">vendas@omniflow.ai</p>
             </div>
-            <Button asChild variant="ghost" size="icon" className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex-shrink-0">
-                <Link href="/login"><LogOut className="w-4 h-4"/></Link>
+            <Button onClick={handleLogout} variant="ghost" size="icon" className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex-shrink-0">
+                <LogOut className="w-4 h-4"/>
             </Button>
           </div>
         </SidebarFooter>
