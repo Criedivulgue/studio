@@ -60,7 +60,7 @@ export type ChatSession = {
 }
 
 export type ChatMessage = {
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'admin';
   content: string;
 };
 
@@ -72,3 +72,16 @@ export type ContactInteraction = {
   timestamp: string;
   notes: string;
 };
+
+export type ActiveChat = {
+    id: string;
+    contact: {
+        id: string;
+        name: string;
+        avatar: string;
+    },
+    lastMessage: string;
+    timestamp: string;
+    unreadCount: number;
+    messages: ChatMessage[];
+}
