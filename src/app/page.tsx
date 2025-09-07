@@ -31,7 +31,7 @@ export default function Home() {
                 </Button>
                 <Button asChild size="lg" variant="secondary">
                   <Link href="/chat/super-admin">
-                    Testar Chat de Demonstração <Bot className="ml-2" />
+                    Iniciar Conversa <Bot className="ml-2" />
                   </Link>
                 </Button>
               </div>
