@@ -3,7 +3,7 @@ export type Contact = {
   name: string;
   email: string;
   phone: string;
-  group: 'VIP' | 'New User' | 'Active' | 'Inactive';
+  group: 'VIP' | 'Novo Usuário' | 'Ativo' | 'Inativo';
   avatar: string;
 };
 
@@ -11,8 +11,8 @@ export type Broadcast = {
   id: string;
   message: string;
   channels: ('Email' | 'WhatsApp' | 'Push')[];
-  target: 'All Users' | 'New User' | 'VIP' | 'Active' | 'Inactive';
-  status: 'Sent' | 'Scheduled' | 'Draft' | 'Failed';
+  target: 'Todos os Usuários' | 'Novo Usuário' | 'VIP' | 'Ativo' | 'Inativo';
+  status: 'Enviada' | 'Agendada' | 'Rascunho' | 'Falhou';
   date: string;
 };
 
@@ -20,7 +20,7 @@ export type ChatSession = {
     id: string;
     user: string;
     date: string;
-    status: 'Resolved' | 'Open' | 'Abandoned';
+    status: 'Resolvido' | 'Aberto' | 'Abandonado';
     snippet: string;
 }
 

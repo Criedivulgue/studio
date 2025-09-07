@@ -20,10 +20,10 @@ import { Logo } from "@/components/logo";
 import { LayoutDashboard, Users, Send, Bot, Settings, LifeBuoy, LogOut } from "lucide-react";
 
 const navItems = [
-  { href: "/admin/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/admin/contacts", icon: Users, label: "Contacts" },
-  { href: "/admin/broadcast", icon: Send, label: "Broadcasts" },
-  { href: "/admin/ai-config", icon: Bot, label: "AI Config" },
+  { href: "/admin/dashboard", icon: LayoutDashboard, label: "Painel" },
+  { href: "/admin/contacts", icon: Users, label: "Contatos" },
+  { href: "/admin/broadcast", icon: Send, label: "Transmissões" },
+  { href: "/admin/ai-config", icon: Bot, label: "Config IA" },
 ];
 
 export default function AdminLayout({
@@ -61,9 +61,9 @@ export default function AdminLayout({
         </SidebarContent>
         <SidebarFooter className="p-4 flex flex-col gap-4">
            <div className="flex flex-col gap-2 p-3 rounded-lg bg-sidebar-accent">
-            <h4 className="font-semibold text-sidebar-accent-foreground text-sm">Need Help?</h4>
-            <p className="text-xs text-sidebar-foreground">Check out our documentation or contact support.</p>
-            <Button size="sm" variant="outline" className="w-full mt-2 bg-transparent border-sidebar-foreground/50 text-sidebar-foreground hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground">Support</Button>
+            <h4 className="font-semibold text-sidebar-accent-foreground text-sm">Precisa de Ajuda?</h4>
+            <p className="text-xs text-sidebar-foreground">Confira nossa documentação ou entre em contato com o suporte.</p>
+            <Button size="sm" variant="outline" className="w-full mt-2 bg-transparent border-sidebar-foreground/50 text-sidebar-foreground hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground">Suporte</Button>
           </div>
           <div className="flex items-center gap-3">
             <Avatar>

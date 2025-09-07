@@ -20,51 +20,51 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <header className="space-y-1.5">
-        <h1 className="text-2xl font-headline font-semibold">Dashboard</h1>
+        <h1 className="text-2xl font-headline font-semibold">Painel</h1>
         <p className="text-muted-foreground">
-          Welcome back! Here's a summary of your activity.
+          Bem-vindo de volta! Aqui está um resumo de sua atividade.
         </p>
       </header>
       
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Chats</CardTitle>
+            <CardTitle className="text-sm font-medium">Total de Chats</CardTitle>
             <MessageSquare className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">1,254</div>
-            <p className="text-xs text-muted-foreground">+12% from last month</p>
+            <p className="text-xs text-muted-foreground">+12% do último mês</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Resolved Issues</CardTitle>
+            <CardTitle className="text-sm font-medium">Problemas Resolvidos</CardTitle>
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">982</div>
-            <p className="text-xs text-muted-foreground">85% resolution rate</p>
+            <p className="text-xs text-muted-foreground">Taxa de resolução de 85%</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">New Contacts</CardTitle>
+            <CardTitle className="text-sm font-medium">Novos Contatos</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">+73</div>
-            <p className="text-xs text-muted-foreground">+20% this month</p>
+            <p className="text-xs text-muted-foreground">+20% este mês</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg. Response Time</CardTitle>
+            <CardTitle className="text-sm font-medium">Tempo Médio de Resposta</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">32s</div>
-            <p className="text-xs text-muted-foreground">-5s from last week</p>
+            <p className="text-xs text-muted-foreground">-5s da última semana</p>
           </CardContent>
         </Card>
       </div>
@@ -72,8 +72,8 @@ export default function DashboardPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="font-headline">Chats per Day</CardTitle>
-            <CardDescription>A look at chat volume over the past 7 days.</CardDescription>
+            <CardTitle className="font-headline">Chats por Dia</CardTitle>
+            <CardDescription>Uma análise do volume de chat nos últimos 7 dias.</CardDescription>
           </CardHeader>
           <CardContent>
             <ChartContainer config={chartConfig} className="h-[250px] w-full">
@@ -84,7 +84,7 @@ export default function DashboardPage() {
                   tickLine={false}
                   tickMargin={10}
                   axisLine={false}
-                  tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  tickFormatter={(value) => new Date(value).toLocaleDateString('pt-BR', { month: 'short', day: 'numeric' })}
                 />
                 <YAxis hide />
                 <ChartTooltip
@@ -98,8 +98,8 @@ export default function DashboardPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle className="font-headline">Recent Contacts</CardTitle>
-            <CardDescription>New users who have recently joined.</CardDescription>
+            <CardTitle className="font-headline">Contatos Recentes</CardTitle>
+            <CardDescription>Novos usuários que se juntaram recentemente.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -123,17 +123,17 @@ export default function DashboardPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="font-headline">Recent Chat Histories</CardTitle>
-          <CardDescription>An overview of the most recent chat sessions.</CardDescription>
+          <CardTitle className="font-headline">Históricos de Chat Recentes</CardTitle>
+          <CardDescription>Uma visão geral das sessões de chat mais recentes.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>User</TableHead>
+                <TableHead>Usuário</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Snippet</TableHead>
-                <TableHead>Date</TableHead>
+                <TableHead>Trecho</TableHead>
+                <TableHead>Data</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -141,8 +141,8 @@ export default function DashboardPage() {
                 <TableRow key={session.id}>
                   <TableCell className="font-medium">{session.user}</TableCell>
                   <TableCell>
-                    <Badge variant={session.status === 'Resolved' ? 'default' : 'secondary'}
-                     className={session.status === 'Resolved' ? 'bg-green-600/20 text-green-700 border-green-600/30' : session.status === 'Abandoned' ? 'bg-red-600/20 text-red-700 border-red-600/30' : ''}
+                    <Badge variant={session.status === 'Resolvido' ? 'default' : 'secondary'}
+                     className={session.status === 'Resolvido' ? 'bg-green-600/20 text-green-700 border-green-600/30' : session.status === 'Abandonado' ? 'bg-red-600/20 text-red-700 border-red-600/30' : ''}
                     >{session.status}</Badge>
                   </TableCell>
                   <TableCell className="text-muted-foreground">{session.snippet}</TableCell>

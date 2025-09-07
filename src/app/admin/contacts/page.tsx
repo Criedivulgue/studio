@@ -15,19 +15,19 @@ export default function ContactsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <header className="space-y-1.5">
-          <h1 className="text-2xl font-headline font-semibold">Contacts</h1>
+          <h1 className="text-2xl font-headline font-semibold">Contatos</h1>
           <p className="text-muted-foreground">
-            Manage your user base and import/export contact lists.
+            Gerencie sua base de usuários e importe/exporte listas de contatos.
           </p>
         </header>
         <div className="flex items-center gap-2">
           <Button variant="outline">
             <Download className="mr-2 h-4 w-4" />
-            Export
+            Exportar
           </Button>
           <Button variant="outline">
             <Upload className="mr-2 h-4 w-4" />
-            Import
+            Importar
           </Button>
         </div>
       </div>
@@ -35,12 +35,12 @@ export default function ContactsPage() {
         <CardHeader>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-              <CardTitle className="font-headline">All Contacts</CardTitle>
-              <CardDescription>A list of all users in your system.</CardDescription>
+              <CardTitle className="font-headline">Todos os Contatos</CardTitle>
+              <CardDescription>Uma lista de todos os usuários em seu sistema.</CardDescription>
             </div>
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search contacts..." className="pl-8 sm:w-[300px]" />
+              <Input placeholder="Buscar contatos..." className="pl-8 sm:w-[300px]" />
             </div>
           </div>
         </CardHeader>
@@ -51,12 +51,12 @@ export default function ContactsPage() {
                 <TableHead className="w-[50px]">
                   <Checkbox />
                 </TableHead>
-                <TableHead>Name</TableHead>
+                <TableHead>Nome</TableHead>
                 <TableHead>Email</TableHead>
-                <TableHead>Phone</TableHead>
-                <TableHead>Group</TableHead>
-                <TableHead>Support</TableHead>
-                <TableHead><span className="sr-only">Actions</span></TableHead>
+                <TableHead>Telefone</TableHead>
+                <TableHead>Grupo</TableHead>
+                <TableHead>Suporte</TableHead>
+                <TableHead><span className="sr-only">Ações</span></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -93,14 +93,14 @@ export default function ContactsPage() {
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" className="h-8 w-8 p-0">
-                          <span className="sr-only">Open menu</span>
+                          <span className="sr-only">Abrir menu</span>
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem>Edit</DropdownMenuItem>
-                        <DropdownMenuItem>View Details</DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive">Delete</DropdownMenuItem>
+                        <DropdownMenuItem>Editar</DropdownMenuItem>
+                        <DropdownMenuItem>Ver Detalhes</DropdownMenuItem>
+                        <DropdownMenuItem className="text-destructive">Excluir</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>

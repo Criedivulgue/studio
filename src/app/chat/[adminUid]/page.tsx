@@ -69,8 +69,8 @@ export default function ChatPage() {
       console.error("AI response error:", error);
       toast({
         variant: "destructive",
-        title: "Error",
-        description: "Failed to get a response from the AI. Please try again.",
+        title: "Erro",
+        description: "Falha ao obter uma resposta da IA. Por favor, tente novamente.",
       });
       setMessages(prev => prev.slice(0, -1)); // Remove the user message on error
     } finally {
@@ -90,8 +90,8 @@ export default function ChatPage() {
        console.error("AI summary error:", error);
        toast({
         variant: "destructive",
-        title: "Error",
-        description: "Failed to summarize chat history.",
+        title: "Erro",
+        description: "Falha ao resumir o histórico de chat.",
       });
     } finally {
         setIsSummarizing(false);
@@ -104,15 +104,15 @@ export default function ChatPage() {
         <div className="flex items-center gap-3">
             <Bot className="h-6 w-6 text-primary" />
             <div>
-                <h1 className="text-lg font-headline font-semibold">AI Assistant</h1>
-                <p className="text-sm text-muted-foreground">Chatting as: {adminUid}</p>
+                <h1 className="text-lg font-headline font-semibold">Assistente de IA</h1>
+                <p className="text-sm text-muted-foreground">Conversando como: {adminUid}</p>
             </div>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center space-x-2">
             <Switch id="custom-info-toggle" checked={useCustomInfo} onCheckedChange={setUseCustomInfo} />
             <Label htmlFor="custom-info-toggle" className="flex items-center gap-1.5 text-sm">
-                <Sparkles className="w-4 h-4 text-primary" /> Custom Info
+                <Sparkles className="w-4 h-4 text-primary" /> Info Personalizada
             </Label>
           </div>
           <Dialog>
@@ -123,17 +123,17 @@ export default function ChatPage() {
                    ) : (
                       <NotebookText className="mr-2 h-4 w-4" />
                    )}
-                   Summarize
+                   Resumir
                 </Button>
              </DialogTrigger>
              <DialogContent>
                 <DialogHeader>
-                    <DialogTitle className="font-headline">Chat Summary</DialogTitle>
+                    <DialogTitle className="font-headline">Resumo do Chat</DialogTitle>
                     <DialogDescription>
-                       A concise summary of the current conversation.
+                       Um resumo conciso da conversa atual.
                     </DialogDescription>
                 </DialogHeader>
-                <p className="text-sm text-muted-foreground py-4">{summary || "No summary available."}</p>
+                <p className="text-sm text-muted-foreground py-4">{summary || "Nenhum resumo disponível."}</p>
              </DialogContent>
           </Dialog>
         </div>
@@ -178,7 +178,7 @@ export default function ChatPage() {
               </Avatar>
                 <div className="max-w-md rounded-xl px-4 py-3 text-sm shadow-md bg-card text-card-foreground rounded-bl-none flex items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                    <span>Thinking...</span>
+                    <span>Pensando...</span>
                 </div>
             </div>
         )}
@@ -195,7 +195,7 @@ export default function ChatPage() {
                 handleSendMessage(e);
               }
             }}
-            placeholder="Ask a question..."
+            placeholder="Faça uma pergunta..."
             className="w-full resize-none rounded-xl border-2 pr-20"
             rows={1}
             disabled={isLoading}

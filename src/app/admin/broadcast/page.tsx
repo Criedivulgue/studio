@@ -26,32 +26,32 @@ export default function BroadcastPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <header className="space-y-1.5">
-          <h1 className="text-2xl font-headline font-semibold">Broadcasts</h1>
+          <h1 className="text-2xl font-headline font-semibold">Transmissões</h1>
           <p className="text-muted-foreground">
-            Create, manage, and monitor your corporate announcements.
+            Crie, gerencie e monitore seus anúncios corporativos.
           </p>
         </header>
         <Sheet>
           <SheetTrigger asChild>
             <Button>
               <PlusCircle className="mr-2 h-4 w-4" />
-              Create Broadcast
+              Criar Transmissão
             </Button>
           </SheetTrigger>
           <SheetContent className="sm:max-w-lg">
             <SheetHeader>
-              <SheetTitle className="font-headline">New Broadcast</SheetTitle>
+              <SheetTitle className="font-headline">Nova Transmissão</SheetTitle>
               <SheetDescription>
-                Craft a message and send it to your users across multiple channels.
+                Crie uma mensagem e envie-a para seus usuários em vários canais.
               </SheetDescription>
             </SheetHeader>
             <div className="grid gap-6 py-6">
               <div className="grid gap-2">
-                <Label htmlFor="message">Message</Label>
-                <Textarea id="message" placeholder="Type your announcement here..." className="min-h-[120px]" />
+                <Label htmlFor="message">Mensagem</Label>
+                <Textarea id="message" placeholder="Digite seu anúncio aqui..." className="min-h-[120px]" />
               </div>
               <div className="grid gap-2">
-                <Label>Channels</Label>
+                <Label>Canais</Label>
                 <div className="flex items-center gap-4">
                   {(['Email', 'WhatsApp', 'Push'] as const).map((channel) => (
                     <div key={channel} className="flex items-center space-x-2">
@@ -64,42 +64,42 @@ export default function BroadcastPage() {
                 </div>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="target-audience">Target Audience</Label>
+                <Label htmlFor="target-audience">Público-Alvo</Label>
                 <Select>
                   <SelectTrigger id="target-audience">
-                    <SelectValue placeholder="Select an audience" />
+                    <SelectValue placeholder="Selecione um público" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Users</SelectItem>
-                    <SelectItem value="new">New User</SelectItem>
+                    <SelectItem value="all">Todos os Usuários</SelectItem>
+                    <SelectItem value="new">Novo Usuário</SelectItem>
                     <SelectItem value="vip">VIP</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="active">Ativo</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <div className="flex justify-end gap-4">
-              <Button variant="outline">Save as Draft</Button>
-              <Button>Send Now</Button>
+              <Button variant="outline">Salvar como Rascunho</Button>
+              <Button>Enviar Agora</Button>
             </div>
           </SheetContent>
         </Sheet>
       </div>
       <Card>
         <CardHeader>
-          <CardTitle className="font-headline">Broadcast History</CardTitle>
-          <CardDescription>A log of all past and scheduled broadcasts.</CardDescription>
+          <CardTitle className="font-headline">Histórico de Transmissão</CardTitle>
+          <CardDescription>Um registro de todas as transmissões passadas e agendadas.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Message</TableHead>
-                <TableHead>Channels</TableHead>
-                <TableHead>Target</TableHead>
+                <TableHead>Mensagem</TableHead>
+                <TableHead>Canais</TableHead>
+                <TableHead>Alvo</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead><span className="sr-only">Actions</span></TableHead>
+                <TableHead>Data</TableHead>
+                <TableHead><span className="sr-only">Ações</span></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -118,10 +118,10 @@ export default function BroadcastPage() {
                   <TableCell>{broadcast.target}</TableCell>
                   <TableCell>
                     <Badge variant={
-                      broadcast.status === 'Sent' ? 'default' : 
-                      broadcast.status === 'Scheduled' ? 'secondary' : 'outline'
+                      broadcast.status === 'Enviada' ? 'default' : 
+                      broadcast.status === 'Agendada' ? 'secondary' : 'outline'
                     }
-                    className={broadcast.status === 'Sent' ? 'bg-green-600/20 text-green-700 border-green-600/30' : ''}
+                    className={broadcast.status === 'Enviada' ? 'bg-green-600/20 text-green-700 border-green-600/30' : ''}
                     >
                       {broadcast.status}
                     </Badge>
@@ -131,14 +131,14 @@ export default function BroadcastPage() {
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" className="h-8 w-8 p-0">
-                          <span className="sr-only">Open menu</span>
+                          <span className="sr-only">Abrir menu</span>
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem>View</DropdownMenuItem>
-                        <DropdownMenuItem>Duplicate</DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive">Delete</DropdownMenuItem>
+                        <DropdownMenuItem>Ver</DropdownMenuItem>
+                        <DropdownMenuItem>Duplicar</DropdownMenuItem>
+                        <DropdownMenuItem className="text-destructive">Excluir</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>

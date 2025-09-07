@@ -11,14 +11,14 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const SuggestResponseInputSchema = z.object({
-  userInquiry: z.string().describe('The user inquiry to respond to.'),
-  adminUid: z.string().describe('The admin UID associated with the chat.'),
-  useCustomInformation: z.boolean().optional().describe('Whether to use custom user information to produce better support conversations.'),
+  userInquiry: z.string().describe('A pergunta do usuário a ser respondida.'),
+  adminUid: z.string().describe('O UID do administrador associado ao chat.'),
+  useCustomInformation: z.boolean().optional().describe('Se deve usar informações personalizadas do usuário para produzir melhores conversas de suporte.'),
 });
 export type SuggestResponseInput = z.infer<typeof SuggestResponseInputSchema>;
 
 const SuggestResponseOutputSchema = z.object({
-  suggestedResponse: z.string().describe('The suggested response to the user inquiry.'),
+  suggestedResponse: z.string().describe('A resposta sugerida para a pergunta do usuário.'),
 });
 export type SuggestResponseOutput = z.infer<typeof SuggestResponseOutputSchema>;
 
@@ -30,15 +30,15 @@ const prompt = ai.definePrompt({
   name: 'suggestResponsePrompt',
   input: {schema: SuggestResponseInputSchema},
   output: {schema: SuggestResponseOutputSchema},
-  prompt: `You are an AI customer support assistant helping admins respond to user inquiries.
+  prompt: `Você é um assistente de suporte ao cliente de IA ajudando administradores a responder às perguntas dos usuários.
 
-  Generate a suggested response to the following user inquiry:
+  Gere uma resposta sugerida para a seguinte pergunta do usuário:
 
   {{userInquiry}}
 
-  The admin UID associated with this chat is: {{adminUid}}.
+  O UID do administrador associado a este chat é: {{adminUid}}.
 
-  Respond as helpfully as possible.
+  Responda da forma mais útil possível.
   `,
 });
 

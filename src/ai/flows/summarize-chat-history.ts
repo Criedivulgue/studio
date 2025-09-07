@@ -14,12 +14,12 @@ import {z} from 'genkit';
 const SummarizeChatHistoryInputSchema = z.object({
   chatHistory: z
     .string()
-    .describe('The complete chat history to summarize.'),
+    .describe('O histórico completo do chat a ser resumido.'),
 });
 export type SummarizeChatHistoryInput = z.infer<typeof SummarizeChatHistoryInputSchema>;
 
 const SummarizeChatHistoryOutputSchema = z.object({
-  summary: z.string().describe('A concise summary of the chat history.'),
+  summary: z.string().describe('Um resumo conciso do histórico do chat.'),
 });
 export type SummarizeChatHistoryOutput = z.infer<typeof SummarizeChatHistoryOutputSchema>;
 
@@ -31,7 +31,7 @@ const prompt = ai.definePrompt({
   name: 'summarizeChatHistoryPrompt',
   input: {schema: SummarizeChatHistoryInputSchema},
   output: {schema: SummarizeChatHistoryOutputSchema},
-  prompt: `Summarize the following chat history in a concise manner, highlighting the main topics discussed and any resolutions or action items agreed upon:\n\n{{{chatHistory}}}`,
+  prompt: `Resuma o seguinte histórico de chat de forma concisa, destacando os principais tópicos discutidos e quaisquer resoluções ou itens de ação acordados:\n\n{{{chatHistory}}}`,
 });
 
 const summarizeChatHistoryFlow = ai.defineFlow(
