@@ -17,12 +17,14 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
-import { LayoutDashboard, Users, Bot, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, Users, Bot, Settings, LogOut, MessageSquare, Contact, History } from "lucide-react";
 
 // Navegação para o Administrador Comum
 const navItems = [
   { href: "/admin/dashboard", icon: LayoutDashboard, label: "Painel" },
-  { href: "/admin/contacts", icon: Users, label: "Contatos" },
+  { href: "/admin/live-chat", icon: MessageSquare, label: "Chat ao Vivo" },
+  { href: "/admin/contacts", icon: Contact, label: "Meus Contatos" },
+  { href: "/admin/history", icon: History, label: "Histórico" },
   { href: "/admin/ai-config", icon: Bot, label: "Config IA" },
 ];
 
