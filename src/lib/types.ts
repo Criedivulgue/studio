@@ -63,3 +63,12 @@ export type ChatMessage = {
   role: 'user' | 'assistant';
   content: string;
 };
+
+export type ContactInteraction = {
+  id: string;
+  contactId: string;
+  adminId: string;
+  type: 'Chat' | 'Ligação' | 'Email';
+  timestamp: string;
+  notes: string;
+};

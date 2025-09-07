@@ -1,4 +1,4 @@
-import type { Contact, ChatSession, User } from "./types";
+import type { Contact, ChatSession, User, ContactInteraction } from "./types";
 
 export const usersData: User[] = [
     { id: 'super-admin', name: 'Super Admin', email: 'admin@omniflow.ai', role: 'Super Admin', avatar: 'https://picsum.photos/seed/admin/40/40' },
@@ -21,6 +21,14 @@ export const chatHistoryData: ChatSession[] = [
     { id: 'c3', user: 'Alice Johnson', date: '2024-05-09 17:20', status: 'Resolvido', snippet: 'Solicitação de redefinição de senha tratada com sucesso.' },
     { id: 'c4', user: 'Novo Visitante', date: '2024-05-09 15:00', status: 'Abandonado', snippet: 'Usuário deixou o chat antes que uma solução fosse encontrada.' },
 ];
+
+export const interactionsData: ContactInteraction[] = [
+  { id: 'int1', contactId: '2', adminId: 'admin-vendas', type: 'Chat', timestamp: '2024-05-15 11:00', notes: 'Iniciou um chat sobre a fatura de Abril.'},
+  { id: 'int2', contactId: '4', adminId: 'admin-suporte', type: 'Ligação', timestamp: '2024-05-15 10:30', notes: 'Ligação para acompanhar o ticket #5421.'},
+  { id: 'int3', contactId: '1', adminId: 'super-admin', type: 'Email', timestamp: '2024-05-14 16:20', notes: 'Enviou e-mail de boas-vindas ao plano VIP.'},
+  { id: 'int4', contactId: '3', adminId: 'super-admin', type: 'Chat', timestamp: '2024-05-14 14:00', notes: 'Respondida dúvida sobre nova funcionalidade X.'},
+];
+
 
 export const chartData = [
   { date: "2024-04-01", chats: 28 },
