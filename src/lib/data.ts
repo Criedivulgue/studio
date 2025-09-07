@@ -40,28 +40,31 @@ export const activeChatsData: ActiveChat[] = [
             { role: 'user', content: 'Olá! Eu tenho uma pergunta sobre o preço.' },
             { role: 'assistant', content: 'Claro! Como posso ajudar com os preços hoje?' },
             { role: 'user', content: 'Quais são os planos disponíveis?' },
-        ]
+        ],
+        adminId: 'super-admin'
     },
     {
         id: 'chat2',
-        contact: { id: '8', name: 'Visitante 2', avatar: 'https://picsum.photos/seed/guest2/40/40' },
+        contact: { id: '8', name: 'Cliente Vendas', avatar: 'https://picsum.photos/seed/guest2/40/40' },
         lastMessage: 'Sim, por favor. Eu preciso de ajuda.',
         timestamp: '10:35 AM',
         unreadCount: 0,
         messages: [
             { role: 'assistant', content: 'Bem-vindo ao nosso suporte! Precisa de ajuda?' },
             { role: 'user', content: 'Sim, por favor. Eu preciso de ajuda.' },
-        ]
+        ],
+        adminId: 'admin-vendas'
     },
      {
         id: 'chat3',
-        contact: { id: '9', name: 'Visitante 3', avatar: 'https://picsum.photos/seed/guest3/40/40' },
+        contact: { id: '9', name: 'Cliente Suporte', avatar: 'https://picsum.photos/seed/guest3/40/40' },
         lastMessage: 'Meu aplicativo está travando.',
         timestamp: '10:32 AM',
         unreadCount: 1,
         messages: [
             { role: 'user', content: 'Meu aplicativo está travando.' },
-        ]
+        ],
+        adminId: 'admin-suporte'
     }
 ]
 

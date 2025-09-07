@@ -84,4 +84,5 @@ export type ActiveChat = {
     timestamp: string;
     unreadCount: number;
     messages: ChatMessage[];
+    adminId: string; // ID do admin responsável pelo chat
 }
