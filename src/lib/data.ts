@@ -1,12 +1,12 @@
 import type { Contact, Broadcast, ChatSession } from "./types";
 
 export const contactsData: Contact[] = [
-  { id: '1', name: 'Alice Johnson', email: 'alice@example.com', phone: '123-456-7890', group: 'VIP', avatar: '/avatars/01.png' },
-  { id: '2', name: 'Bob Williams', email: 'bob@example.com', phone: '234-567-8901', group: 'Novo Usuário', avatar: '/avatars/02.png' },
-  { id: '3', name: 'Charlie Brown', email: 'charlie@example.com', phone: '345-678-9012', group: 'Ativo', avatar: '/avatars/03.png' },
-  { id: '4', name: 'Diana Miller', email: 'diana@example.com', phone: '456-789-0123', group: 'VIP', avatar: '/avatars/04.png' },
-  { id: '5', name: 'Ethan Davis', email: 'ethan@example.com', phone: '567-890-1234', group: 'Inativo', avatar: '/avatars/05.png' },
-  { id: '6', name: 'Fiona Garcia', email: 'fiona@example.com', phone: '678-901-2345', group: 'Novo Usuário', avatar: '/avatars/01.png' },
+  { id: '1', name: 'Alice Johnson', email: 'alice@example.com', phone: '123-456-7890', group: 'VIP', avatar: '/avatars/01.png', ownerId: 'super-admin' },
+  { id: '2', name: 'Bob Williams', email: 'bob@example.com', phone: '234-567-8901', group: 'Novo Usuário', avatar: '/avatars/02.png', ownerId: 'admin-vendas' },
+  { id: '3', name: 'Charlie Brown', email: 'charlie@example.com', phone: '345-678-9012', group: 'Ativo', avatar: '/avatars/03.png', ownerId: 'super-admin' },
+  { id: '4', name: 'Diana Miller', email: 'diana@example.com', phone: '456-789-0123', group: 'VIP', avatar: '/avatars/04.png', ownerId: 'admin-suporte' },
+  { id: '5', name: 'Ethan Davis', email: 'ethan@example.com', phone: '567-890-1234', group: 'Inativo', avatar: '/avatars/05.png', ownerId: 'admin-vendas' },
+  { id: '6', name: 'Fiona Garcia', email: 'fiona@example.com', phone: '678-901-2345', group: 'Novo Usuário', avatar: '/avatars/01.png', ownerId: 'super-admin' },
 ];
 
 export const broadcastData: Broadcast[] = [

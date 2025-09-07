@@ -10,7 +10,17 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
+// Simulação do tipo de usuário logado. No futuro, isso virá de um sistema de autenticação.
+const loggedInUserRole = 'Super Admin'; 
+
 export default function ContactsPage() {
+  
+  // No futuro, os contatos filtrados dependerão do papel do usuário.
+  // const filteredContacts = loggedInUserRole === 'Super Admin' 
+  //   ? contactsData 
+  //   : contactsData.filter(c => c.ownerId === 'id-do-admin-logado');
+  const filteredContacts = contactsData; // Por enquanto, mostrando todos.
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -36,7 +46,11 @@ export default function ContactsPage() {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
               <CardTitle className="font-headline">Todos os Contatos</CardTitle>
-              <CardDescription>Uma lista de todos os usuários em seu sistema.</CardDescription>
+              <CardDescription>
+                {loggedInUserRole === 'Super Admin'
+                  ? 'Visão geral de todos os contatos no sistema.'
+                  : 'Uma lista dos seus contatos atribuídos.'}
+              </CardDescription>
             </div>
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -55,12 +69,13 @@ export default function ContactsPage() {
                 <TableHead>Email</TableHead>
                 <TableHead>Telefone</TableHead>
                 <TableHead>Grupo</TableHead>
+                {loggedInUserRole === 'Super Admin' && <TableHead>Proprietário</TableHead>}
                 <TableHead>Suporte</TableHead>
                 <TableHead><span className="sr-only">Ações</span></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {contactsData.map((contact) => (
+              {filteredContacts.map((contact) => (
                 <TableRow key={contact.id}>
                   <TableCell>
                     <Checkbox />
@@ -79,6 +94,11 @@ export default function ContactsPage() {
                   <TableCell>
                     <Badge variant="secondary">{contact.group}</Badge>
                   </TableCell>
+                  {loggedInUserRole === 'Super Admin' && (
+                    <TableCell>
+                      <Badge variant="outline">{contact.ownerId}</Badge>
+                    </TableCell>
+                  )}
                   <TableCell>
                     <div className="flex gap-2">
                         <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -100,6 +120,7 @@ export default function ContactsPage() {
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem>Editar</DropdownMenuItem>
                         <DropdownMenuItem>Ver Detalhes</DropdownMenuItem>
+                        <DropdownMenuItem>Reatribuir</DropdownMenuItem>
                         <DropdownMenuItem className="text-destructive">Excluir</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>

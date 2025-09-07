@@ -1,26 +1,29 @@
 /**
  * @fileoverview
  * Este arquivo define os tipos de dados centrais usados em toda a aplicação OmniFlow AI.
- *
- * @description
+ */
+
+/**
  * # Tipos de Usuário na Aplicação
  *
- * A aplicação distingue dois papéis de usuário principais:
+ * A aplicação distingue três papéis de usuário principais:
  *
- * 1.  **Administrador**:
- *     - **Descrição**: Um usuário interno que gerencia o sistema.
- *     - **Acesso**: Acessa o painel de administração (`/admin/*`).
- *     - **Responsabilidades**: Configurar o comportamento da IA, gerenciar contatos,
- *       enviar transmissões e monitorar a atividade do chat.
- *     - **Observação**: Atualmente, não há um tipo de dados explícito para Administradores
- *       no banco de dados; seu papel é inferido pelo acesso à rota `/admin`. O termo "Super Admin"
- *       usado na UI é um placeholder.
+ * 1.  **Super Administrador**:
+ *     - **Descrição**: O usuário de nível mais alto com controle total sobre o aplicativo.
+ *     - **Acesso**: Acessa o painel de administração (`/admin/*`) e pode ver/gerenciar todos os dados.
+ *     - **Responsabilidades**: Gerenciar outros administradores, supervisionar todos os contatos e chats,
+ *       configurar configurações globais do aplicativo.
  *
- * 2.  **Usuário Final (Cliente)**:
+ * 2.  **Administrador**:
+ *     - **Descrição**: Um usuário interno com permissões limitadas para gerenciar seus próprios recursos.
+ *     - **Acesso**: Acessa o painel de administração (`/admin/*`), mas sua visão é restrita.
+ *     - **Responsabilidades**: Gerenciar apenas seus próprios contatos e interagir com os chats
+ *       associados a eles. Não pode ver os contatos de outros administradores.
+ *
+ * 3.  **Usuário Final (Cliente)**:
  *     - **Descrição**: Um cliente ou visitante externo que interage com o assistente de IA.
  *     - **Acesso**: Acessa as páginas de chat públicas (ex: `/chat/nome-do-admin`).
  *     - **Responsabilidades**: Conversar com a IA para obter suporte ou informações.
- *     - **Tipo de Dados**: `Contact` representa as informações de um Usuário Final.
  */
 export type Contact = {
   id: string;
@@ -29,6 +32,7 @@ export type Contact = {
   phone: string;
   group: 'VIP' | 'Novo Usuário' | 'Ativo' | 'Inativo';
   avatar: string;
+  ownerId: string; // ID do administrador que é 'dono' do contato
 };
 
 export type Broadcast = {
