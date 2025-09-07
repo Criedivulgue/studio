@@ -8,15 +8,22 @@
  */
 
 import {ai} from '@/ai/genkit';
+import { getAiConfig } from '@/services/configService';
 import {z} from 'genkit';
 
 const SuggestResponseInputSchema = z.object({
   userInquiry: z.string().describe('A pergunta do usuário a ser respondida.'),
   adminUid: z.string().describe('O UID do administrador associado ao chat.'),
-  useCustomInformation: z.boolean().optional().describe('Se deve usar informações personalizadas do usuário para produzir melhores conversas de suporte.'),
-  customInstructions: z.string().optional().describe('Instruções personalizadas para guiar a resposta da IA.'),
+  // O campo useCustomInformation não é mais necessário aqui, pois virá da configuração.
 });
 export type SuggestResponseInput = z.infer<typeof SuggestResponseInputSchema>;
+
+// O schema de input para o prompt precisa das instruções.
+const SuggestResponsePromptInputSchema = SuggestResponseInputSchema.extend({
+    customInstructions: z.string().describe('Instruções personalizadas para guiar a resposta da IA.'),
+    useCustomInformation: z.boolean().describe('Se deve usar informações personalizadas do usuário para produzir melhores conversas de suporte.'),
+});
+
 
 const SuggestResponseOutputSchema = z.object({
   suggestedResponse: z.string().describe('A resposta sugerida para a pergunta do usuário.'),
@@ -24,26 +31,19 @@ const SuggestResponseOutputSchema = z.object({
 export type SuggestResponseOutput = z.infer<typeof SuggestResponseOutputSchema>;
 
 export async function suggestResponse(input: SuggestResponseInput): Promise<SuggestResponseOutput> {
-  // Lógica futura: buscar as instruções do banco de dados com base no adminUid
-  let instructions = '';
-  if (input.adminUid === 'super-admin') {
-      // Em um caso real, buscaríamos as instruções globais salvas pelo super-admin.
-      // Por enquanto, usaremos um valor padrão que pode ser passado.
-      instructions = input.customInstructions || 'Você é o assistente geral da OmniFlow AI. Seja prestativo e informativo.';
-  } else {
-       // Em um caso real, buscaríamos as instruções específicas do admin.
-      instructions = input.customInstructions || `As instruções para ${input.adminUid} ainda não foram configuradas.`;
-  }
+  // Buscar a configuração do admin (ou a global como fallback) do Firestore.
+  const config = await getAiConfig(input.adminUid);
 
   return suggestResponseFlow({
       ...input,
-      customInstructions: instructions,
+      customInstructions: config.customInstructions,
+      useCustomInformation: config.useCustomInformation,
   });
 }
 
 const prompt = ai.definePrompt({
   name: 'suggestResponsePrompt',
-  input: {schema: SuggestResponseInputSchema},
+  input: {schema: SuggestResponsePromptInputSchema},
   output: {schema: SuggestResponseOutputSchema},
   prompt: `Você é um assistente de suporte ao cliente de IA ajudando administradores a responder às perguntas dos usuários.
 
@@ -54,6 +54,9 @@ const prompt = ai.definePrompt({
   "{{userInquiry}}"
 
   O UID do administrador associado a este chat é: {{adminUid}}.
+  {{#if useCustomInformation}}
+  Sinta-se à vontade para usar qualquer informação de contato ou histórico sobre este usuário para criar uma resposta mais personalizada e eficaz.
+  {{/if}}
 
   Responda da forma mais útil possível.
   `,
@@ -62,7 +65,7 @@ const prompt = ai.definePrompt({
 const suggestResponseFlow = ai.defineFlow(
   {
     name: 'suggestResponseFlow',
-    inputSchema: SuggestResponseInputSchema,
+    inputSchema: SuggestResponsePromptInputSchema,
     outputSchema: SuggestResponseOutputSchema,
   },
   async input => {

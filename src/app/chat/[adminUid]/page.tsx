@@ -12,8 +12,6 @@ import { summarizeChatHistory } from "@/ai/flows/summarize-chat-history";
 import type { ChatMessage } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -30,7 +28,6 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
-  const [useCustomInfo, setUseCustomInfo] = useState(true);
   const [summary, setSummary] = useState("");
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
@@ -57,7 +54,6 @@ export default function ChatPage() {
       const response = await suggestResponse({
         userInquiry: input,
         adminUid: Array.isArray(adminUid) ? adminUid[0] : adminUid,
-        useCustomInformation: useCustomInfo,
       });
 
       const assistantMessage: ChatMessage = {
@@ -72,7 +68,8 @@ export default function ChatPage() {
         title: "Erro",
         description: "Falha ao obter uma resposta da IA. Por favor, tente novamente.",
       });
-      setMessages(prev => prev.slice(0, -1)); // Remove the user message on error
+      // Remove a mensagem do usuário se a chamada da IA falhar, para que ele possa tentar novamente.
+      setMessages(prev => prev.filter(m => m !== userMessage));
     } finally {
       setIsLoading(false);
     }
@@ -85,7 +82,7 @@ export default function ChatPage() {
       const chatHistory = messages.map(m => `${m.role}: ${m.content}`).join('\n');
       const result = await summarizeChatHistory({ chatHistory });
       setSummary(result.summary);
-      // The dialog trigger will open the dialog, so we just need to set the content.
+      // O DialogTrigger cuidará de abrir o diálogo.
     } catch (error) {
        console.error("AI summary error:", error);
        toast({
@@ -109,12 +106,7 @@ export default function ChatPage() {
             </div>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex items-center space-x-2">
-            <Switch id="custom-info-toggle" checked={useCustomInfo} onCheckedChange={setUseCustomInfo} />
-            <Label htmlFor="custom-info-toggle" className="flex items-center gap-1.5 text-sm">
-                <Sparkles className="w-4 h-4 text-primary" /> Info Personalizada
-            </Label>
-          </div>
+          {/* O switch foi removido pois a configuração agora vem do banco de dados */}
           <Dialog>
              <DialogTrigger asChild>
                 <Button variant="outline" onClick={handleSummarize} disabled={isSummarizing || messages.length === 0}>
@@ -133,7 +125,7 @@ export default function ChatPage() {
                        Um resumo conciso da conversa atual.
                     </DialogDescription>
                 </DialogHeader>
-                <p className="text-sm text-muted-foreground py-4">{summary || "Nenhum resumo disponível."}</p>
+                <p className="text-sm text-muted-foreground py-4">{summary || "Gerando resumo..."}</p>
              </DialogContent>
           </Dialog>
         </div>

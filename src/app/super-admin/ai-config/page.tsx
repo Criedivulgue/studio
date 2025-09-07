@@ -1,12 +1,66 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { getAiConfig, saveAiConfig } from "@/services/configService";
+import { useToast } from "@/hooks/use-toast";
+import { Loader2 } from "lucide-react";
+
+const ADMIN_ID = "super-admin";
 
 export default function AiConfigPage() {
+  const [instructions, setInstructions] = useState("");
+  const [useCustomInfo, setUseCustomInfo] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    async function loadConfig() {
+      setIsLoading(true);
+      try {
+        const config = await getAiConfig(ADMIN_ID);
+        setInstructions(config.customInstructions);
+        setUseCustomInfo(config.useCustomInformation);
+      } catch (error) {
+        toast({
+          variant: "destructive",
+          title: "Erro ao Carregar",
+          description: "Não foi possível carregar as configurações globais de IA.",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadConfig();
+  }, [toast]);
+
+  const handleSaveChanges = async () => {
+    setIsSaving(true);
+    try {
+      await saveAiConfig(ADMIN_ID, {
+        customInstructions: instructions,
+        useCustomInformation: useCustomInfo,
+      });
+      toast({
+        title: "Sucesso!",
+        description: "Suas configurações globais de IA foram salvas.",
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao Salvar",
+        description: "Não foi possível salvar as alterações.",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <header className="space-y-1.5">
@@ -23,33 +77,50 @@ export default function AiConfigPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex items-center space-x-4 rounded-md border p-4">
-            <div className="flex-1 space-y-1">
-              <Label htmlFor="use-custom-info" className="font-semibold">
-                Usar Informações Personalizadas do Usuário
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                Permita que a IA use informações personalizadas para produzir melhores conversas de suporte.
-              </p>
-            </div>
-            <Switch id="use-custom-info" defaultChecked />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="custom-instructions" className="font-semibold">
-              Instruções Globais
-            </Label>
-            <Textarea
-              id="custom-instructions"
-              placeholder="ex: Você é o assistente geral da OmniFlow AI. Seja prestativo e informativo."
-              className="min-h-[120px]"
-            />
-            <p className="text-sm text-muted-foreground">
-              Forneça diretrizes ou contexto para a IA padrão do sistema.
-            </p>
-          </div>
+          {isLoading ? (
+             <div className="flex items-center justify-center h-40">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+             </div>
+          ) : (
+            <>
+              <div className="flex items-center space-x-4 rounded-md border p-4">
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="use-custom-info" className="font-semibold">
+                    Usar Informações Personalizadas do Usuário
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Permita que a IA use informações personalizadas para produzir melhores conversas de suporte.
+                  </p>
+                </div>
+                <Switch 
+                  id="use-custom-info" 
+                  checked={useCustomInfo}
+                  onCheckedChange={setUseCustomInfo}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="custom-instructions" className="font-semibold">
+                  Instruções Globais
+                </Label>
+                <Textarea
+                  id="custom-instructions"
+                  placeholder="ex: Você é o assistente geral da OmniFlow AI. Seja prestativo e informativo."
+                  className="min-h-[120px]"
+                  value={instructions}
+                  onChange={(e) => setInstructions(e.target.value)}
+                />
+                <p className="text-sm text-muted-foreground">
+                  Forneça diretrizes ou contexto para a IA padrão do sistema.
+                </p>
+              </div>
+            </>
+          )}
         </CardContent>
         <CardFooter>
-          <Button>Salvar Alterações</Button>
+           <Button onClick={handleSaveChanges} disabled={isLoading || isSaving}>
+            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Salvar Alterações
+          </Button>
         </CardFooter>
       </Card>
     </div>
