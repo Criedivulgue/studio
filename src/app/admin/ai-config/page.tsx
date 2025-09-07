@@ -38,7 +38,7 @@ export default function AiConfigPage() {
       }
     }
     loadConfig();
-  }, [toast]);
+  }, []);
 
   const handleSaveChanges = async () => {
     setIsSaving(true);
