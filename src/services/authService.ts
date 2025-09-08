@@ -1,126 +1,100 @@
 import { auth, db } from '@/lib/firebase';
-import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
   signOut,
-  onAuthStateChanged
+  onAuthStateChanged,
+  User as FirebaseUser
 } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
-import type { User } from '@/lib/types';
+import { doc, setDoc, getDoc, updateDoc, deleteField, collection, query, where, getDocs } from 'firebase/firestore';
+import type { User, UserRole } from '@/lib/types';
 
-/**
- * Verifica se já existe um Super Administrador no sistema.
- * @returns {Promise<boolean>} True se existir, false caso contrário.
- */
+// Função para verificar se o superadmin já existe.
 export async function checkSuperAdminExists(): Promise<boolean> {
-  const superAdminRef = doc(db, "users", "super-admin");
-  const docSnap = await getDoc(superAdminRef);
-  return docSnap.exists();
+  const q = query(collection(db, "users"), where("role", "==", "superadmin"));
+  const querySnapshot = await getDocs(q);
+  return !querySnapshot.empty;
 }
 
-/**
- * Cria um novo usuário com email e senha e salva seus dados no Firestore.
- * @param email O email do usuário.
- * @param password A senha do usuário.
- * @param name O nome do usuário.
- * @param role A função do usuário ('Admin' ou 'Super Admin').
- */
-export async function signUp(email: string, password: string, name: string, role: 'Admin' | 'Super Admin' = 'Admin'): Promise<User> {
+// Função de cadastro de usuário
+export async function signUp(email: string, password: string, name: string, role: UserRole = 'admin'): Promise<User> {
   const userCredential = await createUserWithEmailAndPassword(auth, email, password);
   const firebaseUser = userCredential.user;
 
-  // Se for o Super Admin, usamos um ID fixo para facilitar a verificação.
-  // Caso contrário, usamos o UID gerado pelo Firebase.
-  const userId = role === 'Super Admin' ? 'super-admin' : firebaseUser.uid;
-
   const newUser: User = {
-    id: userId,
+    id: firebaseUser.uid,
     name,
     email: firebaseUser.email!,
     role,
-    avatar: `https://picsum.photos/seed/${firebaseUser.uid}/40/40`,
+    avatar: `https://i.pravatar.cc/40?u=${firebaseUser.uid}`,
+    createdAt: new Date(),
   };
 
-  // Salva as informações do usuário no Firestore com o ID correto.
-  await setDoc(doc(db, "users", userId), newUser);
-  
-  // Se for um novo admin (não super-admin), também mantemos o documento com o UID original
-  // para referência futura, se necessário, embora o principal seja o com ID customizado.
-  if (role !== 'Super Admin') {
-      await setDoc(doc(db, "users", firebaseUser.uid), newUser);
-  }
-  
+  await setDoc(doc(db, "users", firebaseUser.uid), newUser);
   return newUser;
 }
 
-/**
- * Autentica um usuário com email e senha.
- * @param email O email do usuário.
- * @param password A senha do usuário.
- * @returns O objeto do usuário do Firestore.
- */
+// Função de login
 export async function signIn(email: string, password:string): Promise<User> {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    
-    // Após o login, precisamos descobrir se o usuário logado é o Super Admin ou um Admin comum.
-    // Primeiro, checamos se ele é o Super Admin.
-    const superAdminRef = doc(db, "users", "super-admin");
-    const superAdminSnap = await getDoc(superAdminRef);
-
-    if (superAdminSnap.exists() && superAdminSnap.data().email === email) {
-        return superAdminSnap.data() as User;
-    }
-
-    // Se não for o super-admin, busca pelo UID.
-    const user = await getCurrentUserByUid(userCredential.user.uid);
+    const user = await getUserProfile(userCredential.user.uid);
     if (!user) {
-        throw new Error('Usuário não encontrado no Firestore após o login.');
+        throw new Error('Perfil do usuário não encontrado no Firestore.');
     }
     return user;
 }
 
-
-/**
- * Desloga o usuário atual.
- */
+// Função de logout
 export async function logout(): Promise<void> {
+  const uid = auth.currentUser?.uid;
+  if (uid) {
+    try {
+      const userDocRef = doc(db, 'users', uid);
+      await updateDoc(userDocRef, { fcmToken: deleteField() });
+    } catch (error) {
+      console.error("Falha ao remover o token FCM durante o logout:", error);
+    }
+  }
   await signOut(auth);
 }
 
 /**
- * Obtém os dados do usuário atualmente logado do Firestore pelo seu UID.
- * @returns O objeto do usuário ou null se não estiver logado.
+ * A FUNÇÃO CORRETA E CENTRALIZADA PARA BUSCAR DADOS DO USUÁRIO.
+ * Busca os dados do perfil de um usuário na coleção "users".
+ * @param uid O ID do usuário (Firebase Auth UID).
+ * @returns O perfil do usuário ou null se não for encontrado.
  */
-export async function getCurrentUserByUid(uid: string): Promise<User | null> {
+export async function getUserProfile(uid: string): Promise<User | null> {
   const userDocRef = doc(db, "users", uid);
   const userDocSnap = await getDoc(userDocRef);
 
   if (userDocSnap.exists()) {
-    return userDocSnap.data() as User;
-  } else {
-    return null;
+    return { id: userDocSnap.id, ...userDocSnap.data() } as User;
   }
+  return null;
 }
 
 /**
- * Observa as mudanças no estado de autenticação.
- * @param callback A função a ser chamada quando o estado mudar.
- * @returns A função para cancelar a inscrição.
+ * O OBSERVADOR DE AUTENTICAÇÃO CORRIGIDO E ROBUSTO.
+ * Ouve as mudanças no estado de autenticação do Firebase e busca o perfil do usuário.
+ * AGORA INCLUI UM BLOCO TRY/CATCH para garantir que a aplicação não trave em um
+ * estado de loading infinito caso a busca do perfil falhe.
  */
 export function onAuthChange(callback: (user: User | null) => void) {
   return onAuthStateChanged(auth, async (firebaseUser) => {
     if (firebaseUser) {
-      // Aqui, a lógica de descoberta de função (Super Admin vs Admin) precisaria ser replicada
-      // para garantir que o objeto de usuário correto seja retornado.
-      const superAdminRef = doc(db, "users", "super-admin");
-      const superAdminSnap = await getDoc(superAdminRef);
-      if (superAdminSnap.exists() && superAdminSnap.data().email === firebaseUser.email) {
-          callback(superAdminSnap.data() as User);
-      } else {
-          const user = await getCurrentUserByUid(firebaseUser.uid);
-          callback(user);
+      try {
+        // Tenta buscar o perfil customizado do usuário.
+        const appUser = await getUserProfile(firebaseUser.uid);
+        callback(appUser);
+      } catch (error) {
+        // SE A BUSCA FALHAR (ex: erro de permissão no Firestore, rede, etc):
+        console.error("Falha catastrófica ao buscar perfil do usuário no onAuthChange:", error);
+        // Informa à aplicação que a autenticação falhou, liberando a tela de loading.
+        callback(null);
       }
     } else {
+      // Se o usuário deslogar, limpamos os dados.
       callback(null);
     }
   });

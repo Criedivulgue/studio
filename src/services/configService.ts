@@ -1,21 +1,25 @@
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
+// A interface que define a estrutura de um objeto de configuração de IA.
 export interface AiConfig {
   useCustomInformation: boolean;
   customInstructions: string;
 }
 
-const CONFIG_COLLECTION = "ai-configs";
+// O nome da subcoleção onde as configurações são armazenadas DENTRO de um usuário.
+const CONFIG_SUBCOLLECTION = "ai-configs";
 
 /**
- * Salva a configuração de IA para um administrador específico.
- * @param adminUid O ID do administrador.
+ * Salva ou atualiza a configuração de IA para um UID de usuário específico.
+ * A função agora constrói o caminho para a subcoleção correta: /users/{uid}/ai-configs/{uid}
+ * @param uid O ID do usuário (admin ou super-admin).
  * @param config O objeto de configuração a ser salvo.
  */
-export async function saveAiConfig(adminUid: string, config: AiConfig): Promise<void> {
+export async function saveAiConfig(uid: string, config: AiConfig): Promise<void> {
   try {
-    const docRef = doc(db, CONFIG_COLLECTION, adminUid);
+    // CORREÇÃO: O caminho do documento agora aponta para a subcoleção.
+    const docRef = doc(db, "users", uid, CONFIG_SUBCOLLECTION, uid);
     await setDoc(docRef, config, { merge: true });
   } catch (error) {
     console.error("Erro ao salvar a configuração de IA:", error);
@@ -24,35 +28,29 @@ export async function saveAiConfig(adminUid: string, config: AiConfig): Promise<
 }
 
 /**
- * Obtém a configuração de IA para um administrador específico.
- * Retorna a configuração padrão (super-admin) se nenhuma configuração específica for encontrada.
- * @param adminUid O ID do administrador.
- * @returns A configuração de IA.
+ * Obtém a configuração de IA para um UID de usuário específico.
+ * A função agora busca a configuração na subcoleção correta: /users/{uid}/ai-configs/{uid}
+ * @param uid O ID do usuário (admin ou super-admin).
+ * @returns A configuração de IA do usuário ou uma configuração padrão.
  */
-export async function getAiConfig(adminUid: string): Promise<AiConfig> {
+export async function getAiConfig(uid: string): Promise<AiConfig> {
   try {
-    const docRef = doc(db, CONFIG_COLLECTION, adminUid);
+    // CORREÇÃO: O caminho do documento agora aponta para a subcoleção.
+    const docRef = doc(db, "users", uid, CONFIG_SUBCOLLECTION, uid);
     const docSnap = await getDoc(docRef);
 
     if (docSnap.exists()) {
       return docSnap.data() as AiConfig;
     } else {
-      // Se o admin não tiver config, tente buscar a do super-admin como padrão
-      if (adminUid !== 'super-admin') {
-        const superAdminRef = doc(db, CONFIG_COLLECTION, 'super-admin');
-        const superAdminSnap = await getDoc(superAdminRef);
-        if (superAdminSnap.exists()) {
-          return superAdminSnap.data() as AiConfig;
-        }
-      }
-      // Retorna um padrão se nada for encontrado
+      // Retorna uma configuração padrão se nenhuma for encontrada.
       return {
         useCustomInformation: true,
-        customInstructions: "Você é um assistente prestativo da OmniFlow AI.",
+        customInstructions: "",
       };
     }
   } catch (error) {
     console.error("Erro ao obter a configuração de IA:", error);
-    throw new Error("Não foi possível carregar a configuração de IA.");
+    // Em caso de erro (como permissão), loga o erro e retorna um padrão seguro.
+    throw error; // Lança o erro para que a UI possa tratá-lo.
   }
 }

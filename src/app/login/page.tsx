@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -10,30 +10,42 @@ import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/logo";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth"; // Importado
 import { signIn, signUp, checkSuperAdminExists } from "@/services/authService";
 import { User } from "@/lib/types";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false); // Renomeado para clareza
   const router = useRouter();
   const { toast } = useToast();
+  const { user, loading: isAuthLoading } = useAuth(); // Hook de autenticação em uso
+
+  // Efeito para redirecionar usuários já logados
+  useEffect(() => {
+    if (!isAuthLoading && user) {
+      toast({ title: "Você já está logado!", description: "Redirecionando para o seu painel..." });
+      if (user.role === 'superadmin') {
+        router.push('/super-admin/dashboard');
+      } else {
+        router.push('/admin/dashboard');
+      }
+    }
+  }, [isAuthLoading, user, router, toast]);
 
   const handleAuth = async (action: "login" | "signup") => {
-    setIsLoading(true);
+    setIsSubmitting(true);
     try {
-      let user: User | null = null;
+      let loggedInUser: User | null = null;
       if (action === "login") {
-        user = await signIn(email, password);
+        loggedInUser = await signIn(email, password);
       } else {
         const name = email.split('@')[0];
-        
-        // Verifica se o Super Admin já existe
         const superAdminExists = await checkSuperAdminExists();
-        const role = superAdminExists ? 'Admin' : 'Super Admin';
+        const role = superAdminExists ? 'admin' : 'superadmin';
 
-        user = await signUp(email, password, name, role);
+        loggedInUser = await signUp(email, password, name, role);
         
         toast({
           title: `Cadastro realizado com sucesso!`,
@@ -41,14 +53,13 @@ export default function LoginPage() {
         });
       }
       
-      if (user) {
+      if (loggedInUser) {
         toast({
-          title: `Bem-vindo, ${user.name}!`,
+          title: `Bem-vindo, ${loggedInUser.name}!`,
           description: "Você será redirecionado para o seu painel.",
         });
 
-        // Redireciona com base na função do usuário
-        if (user.role === 'Super Admin') {
+        if (loggedInUser.role === 'superadmin') {
           router.push('/super-admin/dashboard');
         } else {
           router.push('/admin/dashboard');
@@ -82,17 +93,28 @@ export default function LoginPage() {
         description: message,
       });
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
+  // Mostra um loader em tela cheia enquanto verifica a sessão ou se o usuário já está logado e sendo redirecionado
+  if (isAuthLoading || user) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
+  // Só mostra o formulário se a autenticação terminou e não há usuário
   return (
     <div className="flex items-center justify-center min-h-screen bg-background">
       <Card className="mx-auto max-w-sm w-full">
         <CardHeader className="text-center">
             <div className="flex justify-center mb-4">
+              <Link href="/login">
                 <Logo />
+              </Link>
             </div>
           <CardTitle className="text-2xl font-headline">Acesse sua Conta</CardTitle>
           <CardDescription>
@@ -110,7 +132,7 @@ export default function LoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                disabled={isLoading}
+                disabled={isSubmitting}
               />
             </div>
             <div className="grid gap-2">
@@ -121,16 +143,16 @@ export default function LoginPage() {
                 required 
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                disabled={isLoading}
+                disabled={isSubmitting}
               />
             </div>
             <div className="flex gap-2">
-                <Button onClick={() => handleAuth('login')} className="w-full" disabled={isLoading || !email || !password}>
-                    {isLoading && <Loader2 className="animate-spin" />}
+                <Button onClick={() => handleAuth('login')} className="w-full" disabled={isSubmitting || !email || !password}>
+                    {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                     Login
                 </Button>
-                <Button onClick={() => handleAuth('signup')} variant="secondary" className="w-full" disabled={isLoading || !email || !password}>
-                     {isLoading && <Loader2 className="animate-spin" />}
+                <Button onClick={() => handleAuth('signup')} variant="secondary" className="w-full" disabled={isSubmitting || !email || !password}>
+                     {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} 
                     Cadastrar
                 </Button>
             </div>

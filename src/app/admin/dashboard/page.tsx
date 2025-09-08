@@ -1,158 +1,109 @@
-"use client"
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
-import { chartData, chatHistoryData, contactsData } from "@/lib/data"
-import { Activity, Users, MessageSquare, Clock } from "lucide-react"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+'use client';
 
-const chartConfig = {
-  chats: {
-    label: "Chats",
-    color: "hsl(var(--primary))",
-  },
-}
+import { useState, useEffect } from 'react';
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { useAuth } from '@/hooks/use-auth';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Heading } from "@/components/ui/heading";
+import { BookUser, Users, MessageSquareText, Loader2 } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
 
 export default function DashboardPage() {
+  const { user, loading: authLoading } = useAuth(); 
+  const [stats, setStats] = useState({
+    contacts: 0,
+    groups: 0,
+    chats: 0,
+  });
+  const [dataLoading, setDataLoading] = useState(true);
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      const fetchData = async () => {
+        setDataLoading(true);
+        try {
+          // CORREÇÃO: Trocar todas as instâncias de user.uid por user.id
+          const contactsQuery = query(collection(db, `users/${user.id}/contacts`));
+          const contactsSnap = await getDocs(contactsQuery);
+          
+          const groupsQuery = query(collection(db, `users/${user.id}/groups`));
+          const groupsSnap = await getDocs(groupsQuery);
+
+          const chatsQuery = query(collection(db, 'chatSessions'), where('adminId', '==', user.id));
+          const chatsSnap = await getDocs(chatsQuery);
+
+          setStats({
+            contacts: contactsSnap.size,
+            groups: groupsSnap.size,
+            chats: chatsSnap.size,
+          });
+        } catch (error) {
+          console.error("Error fetching dashboard data: ", error);
+        } finally {
+          setDataLoading(false);
+        }
+      };
+
+      fetchData();
+    }
+  }, [user, authLoading]);
+
+  if (authLoading) {
+      return (
+          <div className="flex items-center justify-center h-full">
+              <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+      )
+  }
+
   return (
-    <div className="space-y-6">
-      <header className="space-y-1.5">
-        <h1 className="text-2xl font-headline font-semibold">Painel</h1>
-        <p className="text-muted-foreground">
-          Bem-vindo de volta! Aqui está um resumo de sua atividade.
-        </p>
-      </header>
-      
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+      <Heading title="Dashboard" description="Visão geral da sua conta." />
+      <Separator />
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total de Chats</CardTitle>
-            <MessageSquare className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">
+              Contatos
+            </CardTitle>
+            <BookUser className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">1,254</div>
-            <p className="text-xs text-muted-foreground">+12% do último mês</p>
+            <div className="text-2xl font-bold">{dataLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : stats.contacts}</div>
+            <p className="text-xs text-muted-foreground">
+              Total de contatos cadastrados
+            </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Problemas Resolvidos</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">982</div>
-            <p className="text-xs text-muted-foreground">Taxa de resolução de 85%</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Novos Contatos</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Grupos
+            </CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">+73</div>
-            <p className="text-xs text-muted-foreground">+20% este mês</p>
+            <div className="text-2xl font-bold">{dataLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : stats.groups}</div>
+            <p className="text-xs text-muted-foreground">
+              Total de grupos criados
+            </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tempo Médio de Resposta</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Conversas</CardTitle>
+            <MessageSquareText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">32s</div>
-            <p className="text-xs text-muted-foreground">-5s da última semana</p>
+            <div className="text-2xl font-bold">{dataLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : stats.chats}</div>
+            <p className="text-xs text-muted-foreground">
+              Sessões de chat iniciadas
+            </p>
           </CardContent>
         </Card>
       </div>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-headline">Chats por Dia</CardTitle>
-            <CardDescription>Uma análise do volume de chat nos últimos 7 dias.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ChartContainer config={chartConfig} className="h-[250px] w-full">
-              <BarChart accessibilityLayer data={chartData}>
-                <CartesianGrid vertical={false} />
-                <XAxis
-                  dataKey="date"
-                  tickLine={false}
-                  tickMargin={10}
-                  axisLine={false}
-                  tickFormatter={(value) => new Date(value).toLocaleDateString('pt-BR', { month: 'short', day: 'numeric' })}
-                />
-                <YAxis hide />
-                <ChartTooltip
-                  cursor={false}
-                  content={<ChartTooltipContent indicator="dot" />}
-                />
-                <Bar dataKey="chats" fill="var(--color-chats)" radius={8} />
-              </BarChart>
-            </ChartContainer>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-headline">Contatos Recentes</CardTitle>
-            <CardDescription>Novos usuários que se juntaram recentemente.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {contactsData.slice(0, 4).map((contact) => (
-                <div key={contact.id} className="flex items-center gap-4">
-                  <Avatar>
-                    <AvatarImage src={`https://picsum.photos/seed/${contact.id}/40/40`} data-ai-hint="profile picture"/>
-                    <AvatarFallback>{contact.name.charAt(0)}</AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1">
-                    <p className="font-medium">{contact.name}</p>
-                    <p className="text-sm text-muted-foreground">{contact.email}</p>
-                  </div>
-                  <Badge variant="secondary">{contact.group}</Badge>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-headline">Históricos de Chat Recentes</CardTitle>
-          <CardDescription>Uma visão geral das sessões de chat mais recentes.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Usuário</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Trecho</TableHead>
-                <TableHead>Data</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {chatHistoryData.map((session) => (
-                <TableRow key={session.id}>
-                  <TableCell className="font-medium">{session.user}</TableCell>
-                  <TableCell>
-                    <Badge variant={session.status === 'Resolvido' ? 'default' : 'secondary'}
-                     className={session.status === 'Resolvido' ? 'bg-green-600/20 text-green-700 border-green-600/30' : session.status === 'Abandonado' ? 'bg-red-600/20 text-red-700 border-red-600/30' : ''}
-                    >{session.status}</Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{session.snippet}</TableCell>
-                  <TableCell className="text-muted-foreground">{session.date}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
     </div>
-  )
+  );
 }

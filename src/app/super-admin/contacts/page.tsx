@@ -1,128 +1,130 @@
-import Image from "next/image";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { contactsData, usersData } from "@/lib/data";
-import { MoreHorizontal, Upload, Download, Search, Phone, MessageSquare, Link2 } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+'use client';
+
+import { useState, useEffect } from 'react';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, collectionGroup, query } from 'firebase/firestore';
+import { useAuth } from '@/hooks/use-auth';
+import { Heading } from "@/components/ui/heading";
+import { Separator } from "@/components/ui/separator";
+import { DataTable } from '@/components/data-table';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
+import { Loader2, Upload, Download, Copy, ShieldAlert } from 'lucide-react';
+import { ContactColumn, columns } from './_components/columns';
 
 export default function SuperAdminContactsPage() {
-  
-  // O Super Admin vê todos os contatos.
-  const allContacts = contactsData;
-  const allUsers = usersData;
+  const { user, loading: authLoading, isSuperAdmin } = useAuth();
+  const [contacts, setContacts] = useState<ContactColumn[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
+  const { toast } = useToast();
 
-  const getUserById = (id: string) => allUsers.find(u => u.id === id);
+  useEffect(() => {
+    if (!authLoading && isSuperAdmin) {
+      const fetchContactsAndUsers = async () => {
+        setDataLoading(true);
+        try {
+          const usersSnapshot = await getDocs(collection(db, 'users'));
+          const userMap = new Map(usersSnapshot.docs.map(doc => [doc.id, doc.data().name]));
+
+          const contactsQuery = query(collectionGroup(db, 'contacts'));
+          const contactsSnapshot = await getDocs(contactsQuery);
+
+          const contactsData: ContactColumn[] = contactsSnapshot.docs.map(doc => {
+            const contactData = doc.data();
+            const userPath = doc.ref.parent.parent;
+            const userId = userPath ? userPath.id : 'N/A';
+            const userName = userMap.get(userId) || 'Usuário Desconhecido';
+            
+            return {
+              id: doc.id,
+              name: contactData.name,
+              phone: contactData.phone,
+              whatsapp: contactData.whatsapp || 'N/A',
+              interesses: contactData.interesses || 'N/A',
+              status: contactData.status,
+              adminName: userName,
+              adminId: userId,
+            };
+          });
+
+          setContacts(contactsData);
+        } catch (error) {
+          console.error("Error fetching global contacts: ", error);
+          toast({ variant: 'destructive', title: 'Erro ao Buscar Contatos', description: 'Verifique as permissões do Firestore e tente novamente.' });
+        } finally {
+          setDataLoading(false);
+        }
+      };
+
+      fetchContactsAndUsers();
+    } else if (!authLoading) {
+      setDataLoading(false);
+    }
+  }, [authLoading, isSuperAdmin, toast]);
+  
+  const handleCopyChatLink = () => {
+    const chatLink = `${window.location.origin}/chat/super-admin`;
+    navigator.clipboard.writeText(chatLink);
+    toast({ title: 'Sucesso', description: 'Link do chat copiado para a área de transferência.' });
+  };
+
+  const handleImport = () => alert('Funcionalidade de Importar a ser implementada.');
+  const handleExport = () => alert('Funcionalidade de Exportar a ser implementada.');
+
+  if (authLoading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!isSuperAdmin) {
+    return (
+        <div className="flex flex-col items-center justify-center h-64 bg-background rounded-md border">
+            <ShieldAlert className="h-12 w-12 text-destructive mb-4" />
+            <Heading title="Acesso Negado" description="Você não tem permissão para acessar esta página." />
+            <p className="text-muted-foreground mt-2">Esta área é restrita aos super administradores.</p>
+        </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <header className="space-y-1.5">
-          <h1 className="text-2xl font-headline font-semibold">Todos os Contatos</h1>
-          <p className="text-muted-foreground">
-            Gerencie toda a base de usuários do sistema.
-          </p>
-        </header>
-        <div className="flex items-center gap-2">
-          <Button variant="outline">
-            <Download className="mr-2 h-4 w-4" />
-            Exportar
-          </Button>
-          <Button variant="outline">
-            <Upload className="mr-2 h-4 w-4" />
-            Importar
-          </Button>
+    <div className="space-y-4">
+        <div className="flex items-center justify-between">
+            <Heading 
+                title={`Contatos Globais (${dataLoading ? '...' : contacts.length})`}
+                description="Visualize e gerencie todos os contatos da plataforma."
+            />
+            <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={handleCopyChatLink}>
+                    <Copy className="mr-2 h-4 w-4" />
+                    Copiar Link do Chat
+                </Button>
+                <Button variant="outline" onClick={handleImport}>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Importar
+                </Button>
+                <Button variant="outline" onClick={handleExport}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Exportar
+                </Button>
+            </div>
         </div>
-      </div>
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div>
-              <CardTitle className="font-headline">Contatos do Sistema</CardTitle>
-              <CardDescription>
-                Visão geral de todos os contatos no sistema.
-              </CardDescription>
-            </div>
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Buscar contatos..." className="pl-8 sm:w-[300px]" />
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[50px]">
-                  <Checkbox />
-                </TableHead>
-                <TableHead>Nome</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Grupo</TableHead>
-                <TableHead>Proprietário</TableHead>
-                <TableHead>Link do Chat</TableHead>
-                <TableHead><span className="sr-only">Ações</span></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {allContacts.map((contact) => {
-                const owner = getUserById(contact.ownerId);
-                return (
-                <TableRow key={contact.id}>
-                  <TableCell>
-                    <Checkbox />
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-3">
-                      <Avatar>
-                        <AvatarImage src={`https://picsum.photos/seed/${contact.id}/40/40`} data-ai-hint="profile picture" />
-                        <AvatarFallback>{contact.name.charAt(0)}</AvatarFallback>
-                      </Avatar>
-                      {contact.name}
-                    </div>
-                  </TableCell>
-                  <TableCell>{contact.email}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{contact.group}</Badge>
-                  </TableCell>
-                  <TableCell>
-                      <Badge variant="outline">{owner?.name || contact.ownerId}</Badge>
-                  </TableCell>
-                  <TableCell>
-                     <Button variant="ghost" size="sm" asChild>
-                        <Link href={`/chat/${contact.ownerId}`} target="_blank">
-                           <Link2 className="mr-2 h-4 w-4" />
-                           /chat/{contact.ownerId}
-                        </Link>
-                     </Button>
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                          <span className="sr-only">Abrir menu</span>
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem>Editar</DropdownMenuItem>
-                        <DropdownMenuItem>Ver Detalhes</DropdownMenuItem>
-                        <DropdownMenuItem>Reatribuir</DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive">Excluir</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              )})}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <Separator />
+      {dataLoading ? (
+        <div className="flex justify-center items-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={contacts}
+          searchKey="name"
+          placeholder="Filtrar por nome do contato..."
+          emptyMessage="Nenhum contato encontrado na plataforma."
+        />
+      )}
     </div>
   );
 }

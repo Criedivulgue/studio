@@ -32,57 +32,99 @@
  * - **Acesso**: Acessa as páginas de chat públicas (ex: `/chat/id-do-admin`). Não possui login.
  * - **Responsabilidades**: Conversar com a IA para obter suporte ou informações.
  */
+export type UserRole = 'superadmin' | 'admin';
 
-export type User = {
-    id: string;
-    name: string;
-    email: string;
-    role: 'Super Admin' | 'Admin';
-    avatar: string;
-}
-
-export type Contact = {
+export interface User {
   id: string;
   name: string;
   email: string;
-  phone: string;
-  group: 'VIP' | 'Novo Usuário' | 'Ativo' | 'Inativo';
-  avatar: string;
-  ownerId: string; // ID do administrador que é 'dono' do contato
-};
-
-export type ChatSession = {
-    id: string;
-    user: string;
-    date: string;
-    status: 'Resolvido' | 'Aberto' | 'Abandonado';
-    snippet: string;
+  role: UserRole;
+  avatar?: string;
+  createdAt?: any; 
+  contactGroups?: string[];
+  aiPrompt?: string;
 }
 
-export type ChatMessage = {
-  role: 'user' | 'assistant' | 'admin';
-  content: string;
-};
+/**
+ * Representa um lead ou cliente final na lista de um administrador.
+ * ESTA É A DEFINIÇÃO CANÔNICA DE UM CONTATO.
+ */
+export interface Contact {
+  id: string;
+  ownerId: string;
+  name: string;
+  email: string;
+  whatsapp: string;
+  phone: string;
+  status: 'active' | 'inactive';
+  interesses: string[];
+  createdAt?: any;
+}
 
-export type ContactInteraction = {
+/**
+ * Representa uma sessão de chat passada no histórico.
+ */
+export interface ChatSession {
+  id: string;
+  user: string;
+  date: string;
+  status: 'Resolvido' | 'Aberto' | 'Abandonado';
+  snippet: string;
+}
+
+/**
+ * Representa uma interação específica (chat, ligação, email) com um contato.
+ */
+export interface ContactInteraction {
   id: string;
   contactId: string;
   adminId: string;
   type: 'Chat' | 'Ligação' | 'Email';
   timestamp: string;
   notes: string;
-};
+}
 
-export type ActiveChat = {
-    id: string;
-    contact: {
-        id: string;
-        name: string;
-        avatar: string;
-    },
-    lastMessage: string;
-    timestamp: string;
-    unreadCount: number;
-    messages: ChatMessage[];
-    adminId: string; // ID do admin responsável pelo chat
+/**
+ * Representa uma mensagem individual dentro de um chat ativo.
+ */
+export interface ChatMessage {
+  role: 'user' | 'assistant' | 'admin';
+  content: string;
+  senderId?: string;
+  timestamp?: any; // Usado para ordenação no Firestore
+  text?: string; // Adicionado para compatibilidade
+}
+
+/**
+ * Representa a informação de um contato dentro de um chat ativo.
+ */
+export interface ChatContact {
+  id: string;
+  name: string;
+  avatar?: string;
+}
+
+/**
+ * Representa um chat atualmente ativo na plataforma.
+ */
+export interface ActiveChat {
+  id: string;
+  contact: ChatContact;
+  lastMessage: string;
+  timestamp: string;
+  unreadCount: number;
+  messages: ChatMessage[];
+  adminId: string;
+}
+
+/**
+ * Representa um item na lista de conversas do componente de chat.
+ */
+export interface Conversation {
+  id: string;
+  path: string;
+  name: string;
+  lastMessage: string;
+  unreadCount: number;
+  lastMessageTimestamp?: any;
 }

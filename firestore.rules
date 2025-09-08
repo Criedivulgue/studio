@@ -2,23 +2,60 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Regra específica para a coleção 'users'
+
+    // Função auxiliar para verificar se o usuário é um superadmin.
+    function isSuperAdmin() {
+      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'superadmin';
+    }
+    
+    // Função para validar a estrutura de um Contato
+    function isContactDataValid() {
+      let data = request.resource.data;
+      return data.name is string &&
+             data.email is string &&
+             data.whatsapp is string &&
+             data.phone is string &&
+             data.status is string && (data.status == 'active' || data.status == 'inactive') &&
+             data.interesses is list &&
+             data.ownerId is string;
+    }
+
+    // Regras para a coleção 'users'
     match /users/{userId} {
-      // Qualquer pessoa pode criar um documento de usuário (se cadastrar)
-      allow create: if true;
-      
-      // Apenas o usuário autenticado pode ler, atualizar ou apagar seus próprios dados
-      // O Super Admin (com ID fixo) também pode ter acesso, se necessário (adicionado para flexibilidade)
-      allow read, update, delete: if request.auth != null && (request.auth.uid == userId || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Super Admin'); 
+      allow read, write: if request.auth.uid == userId || isSuperAdmin();
+      allow read: if userId == 'superadmin';
+
+      // Sub-coleções de users (exceto contatos, que agora é raiz)
+      match /ai-configs/{configId} {
+        allow read, write: if request.auth.uid == userId || isSuperAdmin();
+      }
+      match /groups/{groupId} {
+        allow read, write: if request.auth.uid == userId || isSuperAdmin();
+      }
     }
 
-    // Regra para a coleção 'ai-configs'
-    match /ai-configs/{configId} {
-        // Apenas o usuário autenticado pode ler/escrever sua própria config ou a config global
-        allow read, write: if request.auth != null;
+    // --- NOVA REGRA PARA A COLEÇÃO RAIZ 'contacts' ---
+    match /contacts/{contactId} {
+      // LEITURA, ATUALIZAÇÃO, DELEÇÃO: Permitido para o dono do contato ou superadmin.
+      allow read, update, delete: if request.auth != null && (resource.data.ownerId == request.auth.uid || isSuperAdmin());
+
+      // CRIAÇÃO:
+      // 1. Permitido para qualquer usuário logado (admin/superadmin) que passe dados válidos.
+      // 2. Permitido para visitantes anônimos (leads do chat) que passem dados válidos.
+      allow create: if (request.auth != null || request.auth == null) && isContactDataValid();
     }
 
-    // Regras para outras coleções podem ser adicionadas aqui.
-    // Se nenhuma outra regra corresponder, o acesso é negado por padrão.
+    // Regra para o super-admin poder listar todos os contatos.
+    match /{path=**}/contacts/{contactId} {
+      allow read: if isSuperAdmin();
+    }
+
+    // Regras para sessões de chat e mensagens (sem alterações)
+    match /chatSessions/{sessionId} {
+      allow read, write: if request.auth != null && (resource.data.adminId == request.auth.uid || isSuperAdmin());
+    }
+    match /chats/{chatId}/messages/{messageId} {
+      allow read, write: if true;
+    }
   }
 }

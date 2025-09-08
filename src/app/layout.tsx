@@ -1,6 +1,7 @@
-import type {Metadata} from 'next';
+import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
+import { AuthProvider } from '@/hooks/use-auth'; // Importando o AuthProvider
 
 export const metadata: Metadata = {
   title: 'OmniFlow AI',
@@ -20,7 +21,9 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
       </head>
       <body className="font-body antialiased">
-        {children}
+        <AuthProvider> {/* Envolvendo a aplicação com o provedor */}
+          {children}
+        </AuthProvider>
         <Toaster />
       </body>
     </html>

@@ -1,9 +1,13 @@
+'use client';
+
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { ArrowRight, Bot, Zap } from "lucide-react";
 import { Logo } from "@/components/logo";
 
+// A página Home agora é uma página de marketing estática.
+// Ela não busca mais dados dinâmicos, eliminando a causa do erro.
 export default function Home() {
   return (
     <div className="flex flex-col min-h-screen">
@@ -29,11 +33,9 @@ export default function Home() {
                     Acessar Painel <ArrowRight className="ml-2" />
                   </Link>
                 </Button>
-                <Button asChild size="lg" variant="secondary">
-                  <Link href="/chat/super-admin">
-                    Iniciar Conversa <Bot className="ml-2" />
-                  </Link>
-                </Button>
+                {/* O botão "Iniciar Conversa" foi removido daqui, pois
+                    a conversa agora é iniciada por uma URL específica de cada admin,
+                    e não de forma genérica na homepage. */}
               </div>
             </div>
           </div>
