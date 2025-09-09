@@ -11,47 +11,30 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 import { useAuth } from '@/hooks/use-auth';
-import { getContactsByOwner, getAllContacts } from '@/services/contactService';
 import type { Contact } from '@/lib/types';
 import { AddContactModal } from '@/components/admin/AddContactModal';
 import { toast } from '@/hooks/use-toast';
-import { ChatLinkSharer } from '@/components/admin/ChatLinkSharer';
 
 type ContactManagerProps = {
-  scope: 'user' | 'all';
   title: string;
   description: string;
 };
 
-export function ContactManager({ scope, title, description }: ContactManagerProps) {
+export function ContactManager({ title, description }: ContactManagerProps) {
   const { user } = useAuth();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
-  const adminUid = user?.id || '';
-
-  // A função de busca de contatos foi movida para ser definida uma vez, com useCallback para estabilidade
   useEffect(() => {
-    const fetchContacts = async () => {
-      if (!user?.id) return;
-      setIsLoading(true);
-      try {
-        const fetcher = scope === 'all' ? getAllContacts : () => getContactsByOwner(user.id);
-        const fetchedContacts = await fetcher();
-        setContacts(fetchedContacts.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
-      } catch (error) {
-        console.error('Failed to fetch contacts:', error);
-        toast({ variant: 'destructive', title: 'Erro ao carregar contatos', description: 'Não foi possível buscar os contatos. Tente recarregar a página.' });
-      } finally {
+    const fetchDummyData = () => {
+        setIsLoading(true);
+        setContacts([]);
         setIsLoading(false);
-      }
-    };
+    }
+    fetchDummyData();
+  }, [user?.id]);
 
-    fetchContacts();
-  }, [user?.id, scope, toast]);
-
-  // CORREÇÃO: Filtro robusto que não quebra se nome ou email forem nulos/undefined.
   const filteredContacts = contacts.filter(
     (contact) =>
       (contact.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -74,17 +57,15 @@ export function ContactManager({ scope, title, description }: ContactManagerProp
             <Download className="h-4 w-4" />
             Exportar
           </Button>
-          {user && scope === 'user' && <AddContactModal adminUid={user.id} onSuccess={() => {}} />}
+          {user && <AddContactModal adminUid={user.id} onSuccess={() => {}} />}
         </div>
       </div>
-      
-      {adminUid && scope === 'user' && <ChatLinkSharer adminUid={adminUid} />}
 
       <Card>
         <CardHeader>
           <div className='flex flex-col justify-between gap-4 sm:flex-row sm:items-center'>
             <div>
-              <CardTitle className='font-headline'>Sua Lista de Contatos</CardTitle>
+              <CardTitle className='font-headline'>Teste de Cache - Você Vê Isso?</CardTitle>
               <CardDescription>{filteredContacts.length} contatos encontrados.</CardDescription>
             </div>
             <div className='relative'>
@@ -110,8 +91,6 @@ export function ContactManager({ scope, title, description }: ContactManagerProp
                   <TableHead>Nome</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>WhatsApp</TableHead>
-                  <TableHead>Grupo</TableHead>
-                  {scope === 'all' && <TableHead>Proprietário</TableHead>}
                   <TableHead className='text-center'>Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -123,7 +102,6 @@ export function ContactManager({ scope, title, description }: ContactManagerProp
                         <div className='flex items-center gap-3'>
                           <Avatar className='h-8 w-8'>
                             <AvatarImage src={`https://avatar.vercel.sh/${contact.email}.png`} />
-                            {/* CORREÇÃO: Fallback robusto para o nome */}
                             <AvatarFallback>{(contact.name || ' ').charAt(0).toUpperCase()}</AvatarFallback>
                           </Avatar>
                           {contact.name || 'Nome não informado'}
@@ -131,15 +109,6 @@ export function ContactManager({ scope, title, description }: ContactManagerProp
                       </TableCell>
                       <TableCell>{contact.email || 'Email não informado'}</TableCell>
                       <TableCell>{contact.whatsapp || '-'}</TableCell>
-                      <TableCell>
-                        <Badge variant='secondary'>{contact.group || '-'}</Badge>
-                      </TableCell>
-                      {scope === 'all' && (
-                        <TableCell>
-                          {/* CORREÇÃO: Renderização robusta que não quebra se ownerId for nulo/undefined */}
-                           <Badge variant="outline">{contact.ownerId ? `${contact.ownerId.substring(0, 5)}...` : 'N/D'}</Badge>
-                        </TableCell>
-                      )}
                       <TableCell className='text-center'>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -159,7 +128,7 @@ export function ContactManager({ scope, title, description }: ContactManagerProp
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={scope === 'all' ? 6 : 5} className='h-24 text-center'>
+                    <TableCell colSpan={4} className='h-24 text-center'>
                       Nenhum contato encontrado.
                     </TableCell>
                   </TableRow>

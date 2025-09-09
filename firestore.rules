@@ -4,51 +4,49 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // HELPER FUNCTIONS
-    function getUserData(userId) {
-      return get(/databases/$(database)/documents/users/$(userId)).data;
-    }
-
-    function isSuperAdmin(userId) {
-      // This function requires that the rules allow reading the user's document.
-      return getUserData(userId).role == 'superadmin';
-    }
-
     function isSignedIn() {
       return request.auth != null;
     }
 
     function isOwner(userId) {
-      return request.auth.uid == userId;
+      return isSignedIn() && request.auth.uid == userId;
     }
 
-    // MASTER RULE: A Super Admin can read and write ANY document.
-    // This is a fallback, more specific rules below will override this.
-    match /{document=**} {
-      allow read, write: if isSignedIn() && isSuperAdmin(request.auth.uid);
+    function isSuperAdmin() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'superadmin';
     }
 
     // Users:
-    // Owners can read/write their own profiles.
-    // Super Admins can ALSO read/write any user profile. THIS IS THE FIX.
     match /users/{userId} {
-      allow read, write: if isSignedIn() && (isOwner(userId) || isSuperAdmin(request.auth.uid));
+      allow read, write: if isOwner(userId) || isSuperAdmin();
+    }
+    
+    // Contacts:
+    match /contacts/{contactId} {
+      // Anyone can create a contact (e.g., a potential lead from a public page).
+      allow create: if true;
+      
+      // Only the owner admin or a superadmin can read, update, or delete it.
+      allow read, update, delete: if (isSignedIn() && isOwner(resource.data.ownerId)) || isSuperAdmin();
     }
 
     // Global Conversation Collection
     match /conversations/{conversationId} {
-      // ANY user (even anonymous) can create a conversation.
-      allow create: if request.resource.data.keys().hasAll(['adminId', 'contactId', 'contactName', 'lastMessage']);
+      // Anyone can create a conversation.
+      allow create: if true;
       
-      // The owner (admin) of the conversation can read, update, and delete.
-      // Super Admins are already covered by the master rule.
-      allow read, update, delete: if isSignedIn() && isOwner(resource.data.adminId);
+      // Anyone can read a conversation document (needed for anon users to listen).
+      allow read: if true;
+      
+      // Only the assigned admin and superadmins can update or delete the conversation.
+      allow update, delete: if (isSignedIn() && isOwner(resource.data.adminId)) || isSuperAdmin();
 
-      // Messages within a conversation
       match /messages/{messageId} {
-        // Reading messages is public within the conversation.
-        allow read: if true;
-        // The conversation admin or anonymous visitor can create messages.
-        allow create: if (isSignedIn() && isOwner(get(/databases/$(database)/documents/conversations/$(conversationId)).data.adminId)) || request.auth == null;
+        // Anyone can read or create messages. Security through obscurity of conversationId.
+        allow read, create: if true;
+        
+        // Messages are immutable to maintain a true record of the chat.
+        allow update, delete: if false;
       }
     }
   }

@@ -6,13 +6,11 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { ArrowRight, Bot, Zap } from "lucide-react";
 import { Logo } from "@/components/logo";
 
-// A página Home agora é uma página de marketing estática.
-// Ela não busca mais dados dinâmicos, eliminando a causa do erro.
 export default function Home() {
   return (
     <div className="flex flex-col min-h-screen">
       <header className="container mx-auto px-4 md:px-6 h-16 flex items-center">
-        <Link href="#" className="flex items-center gap-2" prefetch={false}>
+        <Link href="/" className="flex items-center gap-2" prefetch={false}>
           <Logo />
           <span className="font-headline text-xl font-bold">OmniFlow AI</span>
         </Link>
@@ -22,20 +20,22 @@ export default function Home() {
           <div className="container mx-auto px-4 md:px-6 text-center">
             <div className="max-w-3xl mx-auto">
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-headline font-bold tracking-tighter mb-4">
-                Atendimento ao Cliente Mais Inteligente, Instantaneamente
+                Precisa de Ajuda? Fale Conosco Agora.
               </h1>
               <p className="text-lg md:text-xl text-muted-foreground mb-8">
-                O OmniFlow AI roteia dinamicamente os chats para a IA certa, configurada por seus administradores, para respostas hiper-relevantes.
+                Clique no botão abaixo para iniciar uma conversa com nosso assistente de IA e ser conectado a um especialista.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button asChild size="lg">
+                 <Button asChild size="lg" className="font-bold">
+                  <Link href="/chat/YxV6l12x9wR7Kca2fV9S2345678">
+                    Iniciar Atendimento <Bot className="ml-2" />
+                  </Link>
+                </Button>
+                <Button asChild size="lg" variant="outline">
                   <Link href="/login">
                     Acessar Painel <ArrowRight className="ml-2" />
                   </Link>
                 </Button>
-                {/* O botão "Iniciar Conversa" foi removido daqui, pois
-                    a conversa agora é iniciada por uma URL específica de cada admin,
-                    e não de forma genérica na homepage. */}
               </div>
             </div>
           </div>

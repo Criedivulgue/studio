@@ -42,13 +42,17 @@ export function Chat({ user }: { user: User }) {
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
   const userId = user.id;
 
+  // REATORADO: Ouve a coleção GLOBAL `conversations` filtrando pelo adminId
   useEffect(() => {
     if (!userId) return;
 
     setLoadingConversations(true);
 
-    // Query for user's conversations
-    const conversationsQuery = query(collection(db, `users/${userId}/conversations`), orderBy('lastMessageTimestamp', 'desc'));
+    const conversationsQuery = query(
+      collection(db, "conversations"), 
+      where("adminId", "==", userId), 
+      orderBy('lastMessageTimestamp', 'desc')
+    );
 
     const unsubscribe = onSnapshot(conversationsQuery, (snapshot) => {
       const convos = snapshot.docs.map(doc => {
@@ -56,10 +60,9 @@ export function Chat({ user }: { user: User }) {
         return {
           id: doc.id,
           path: doc.ref.path,
-          name: data.name || 'Conversa desconhecida',
+          name: data.contactName || 'Conversa desconhecida',
           lastMessage: data.lastMessage || '',
-          // FIX: Temporarily setting unreadCount to 0 to avoid complex query
-          unreadCount: 0, 
+          unreadCount: data.unreadCount || 0,
         } as Conversation;
       });
       setConversations(convos);
@@ -183,15 +186,19 @@ export function Chat({ user }: { user: User }) {
           <ScrollArea className="flex-1">
             {loadingConversations ? (
               <div className="flex justify-center items-center h-full p-4"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-            ) : filteredConversations.map(convo => (
-              <div key={convo.id} className={cn("p-4 cursor-pointer hover:bg-muted/50 border-b flex justify-between items-center", selectedConversation?.id === convo.id && "bg-muted")} onClick={() => handleSelectConversation(convo)}>
-                <div className="w-full truncate">
-                  <p className="font-semibold truncate">{convo.name}</p>
-                  <p className="text-sm text-muted-foreground truncate">{convo.lastMessage}</p>
-                </div>
-                {convo.unreadCount > 0 && <Badge className="flex-shrink-0 ml-2">{convo.unreadCount}</Badge>}
-              </div>
-            ))}
+            ) : filteredConversations.length > 0 ? (
+                filteredConversations.map(convo => (
+                  <div key={convo.id} className={cn("p-4 cursor-pointer hover:bg-muted/50 border-b flex justify-between items-center", selectedConversation?.id === convo.id && "bg-muted")} onClick={() => handleSelectConversation(convo)}>
+                    <div className="w-full truncate">
+                      <p className="font-semibold truncate">{convo.name}</p>
+                      <p className="text-sm text-muted-foreground truncate">{convo.lastMessage}</p>
+                    </div>
+                    {convo.unreadCount > 0 && <Badge className="flex-shrink-0 ml-2">{convo.unreadCount}</Badge>}
+                  </div>
+                ))
+              ) : (
+                <div className="text-center p-4 text-muted-foreground text-sm">Nenhuma conversa encontrada.</div>
+            )}
           </ScrollArea>
         </aside>
 
@@ -240,6 +247,7 @@ export function Chat({ user }: { user: User }) {
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground bg-background/50">
               <MessageSquare className="h-12 w-12 mb-4"/>
               <p className="text-lg">Selecione uma conversa para começar</p>
+              <p className="text-sm mt-2">Ou compartilhe seu link de chat para receber novos contatos.</p>
             </div>
           )}
         </main>

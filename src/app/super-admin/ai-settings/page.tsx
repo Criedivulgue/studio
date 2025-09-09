@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore'; // Importar setDoc
 import { db } from '@/lib/firebase';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -33,7 +33,7 @@ export default function GlobalAISettingsPage() {
   });
 
   useEffect(() => {
-    const docRef = doc(db, 'system_settings', 'ai_global'); // Erro de sintaxe corrigido
+    const docRef = doc(db, 'system_settings', 'ai_global');
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
@@ -53,7 +53,8 @@ export default function GlobalAISettingsPage() {
     setIsSaving(true);
     try {
       const docRef = doc(db, 'system_settings', 'ai_global');
-      await updateDoc(docRef, data);
+      // Usar setDoc com merge: true para criar ou atualizar o documento
+      await setDoc(docRef, data, { merge: true }); 
       toast({ title: 'Sucesso', description: 'Configurações da IA atualizadas com sucesso!' });
     } catch (error) {
       console.error("Error updating AI settings: ", error);

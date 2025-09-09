@@ -11,11 +11,12 @@ import { Loader2 } from 'lucide-react';
 
 interface LeadCaptureModalProps {
   open: boolean;
+  onOpenChange: (open: boolean) => void; // <-- ADICIONADO: Permite que o componente pai controle o estado.
   adminUid: string;
   onSuccess: (contact: Contact) => void;
 }
 
-export function LeadCaptureModal({ open, adminUid, onSuccess }: LeadCaptureModalProps) {
+export function LeadCaptureModal({ open, onOpenChange, adminUid, onSuccess }: LeadCaptureModalProps) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
@@ -35,15 +36,14 @@ export function LeadCaptureModal({ open, adminUid, onSuccess }: LeadCaptureModal
 
     setIsLoading(true);
     try {
-      // CORREÇÃO: Criando o objeto de acordo com o Modelo Canônico
       const newContactData = {
         ownerId: adminUid,
         name,
         email,
         whatsapp,
-        phone: '', // Adicionado: Telefone é opcional e não coletado aqui
-        status: 'active' as const, // Adicionado: Status padrão para novos leads
-        interesses: [], // Adicionado: Interesses começa vazio
+        phone: '',
+        status: 'active' as const,
+        interesses: [],
       };
       
       const contactId = await createContact(newContactData);
@@ -70,13 +70,15 @@ export function LeadCaptureModal({ open, adminUid, onSuccess }: LeadCaptureModal
   };
 
   return (
-    <Dialog open={open}>
-      <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => e.preventDefault()}>
+    // O `onOpenChange` é passado aqui. O Dialog agora notificará o pai quando deve ser fechado.
+    // A propriedade `onInteractOutside` foi removida para permitir o fechamento ao clicar fora.
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[425px]">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle className='font-headline'>Identifique-se</DialogTitle>
+            <DialogTitle className='font-headline'>Identifique-se para Atendimento</DialogTitle>
             <DialogDescription>
-              Para uma melhor experiência, por favor, preencha seus dados abaixo para iniciar a conversa.
+              Para falar com um de nossos atendentes, por favor, informe seus dados.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -106,7 +108,7 @@ export function LeadCaptureModal({ open, adminUid, onSuccess }: LeadCaptureModal
           <DialogFooter>
             <Button type="submit" className='w-full' disabled={isLoading}>
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Iniciar Conversa
+              Falar com Atendente
             </Button>
           </DialogFooter>
         </form>

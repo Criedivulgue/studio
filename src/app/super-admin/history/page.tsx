@@ -1,81 +1,74 @@
-"use client"
+'use client';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { interactionsData, contactsData, usersData } from "@/lib/data";
-import { MessageSquare, Phone, Mail } from "lucide-react";
+import { useEffect, useState } from 'react';
+import { collectionGroup, onSnapshot, query, getDocs, collection } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { Heading } from "@/components/ui/heading";
+import { Separator } from "@/components/ui/separator";
+import { DataTable } from '@/components/data-table';
+import { Loader2 } from 'lucide-react';
+import { History, columns } from './_components/columns'; // Adapte as colunas conforme necessário
 
-export default function HistoryPage() {
+export default function SuperAdminHistoryPage() {
+  const [history, setHistory] = useState<History[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const getContactById = (id: string) => contactsData.find(c => c.id === id);
-  const getAdminById = (id: string) => usersData.find(u => u.id === id);
+  useEffect(() => {
+    // A consulta agora busca da coleção 'conversations', que é o nosso histórico de chat.
+    const q = query(collection(db, 'conversations'));
 
-  const interactionIcons = {
-    Chat: <MessageSquare className="h-4 w-4" />,
-    Ligação: <Phone className="h-4 w-4" />,
-    Email: <Mail className="h-4 w-4" />,
-  }
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      // Cache para evitar buscar o mesmo usuário (admin) múltiplas vezes
+      const usersCache = new Map<string, string>();
+      const adminsSnapshot = await getDocs(collection(db, 'users'));
+      adminsSnapshot.forEach(doc => {
+        usersCache.set(doc.id, doc.data().name || `Admin ${doc.id.substring(0, 4)}`);
+      });
+
+      const historyData: History[] = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          contactName: data.contactName || 'Nome não encontrado',
+          adminName: usersCache.get(data.adminId) || 'Admin desconhecido',
+          lastMessage: data.lastMessage || 'Nenhuma mensagem',
+          status: data.status || 'active',
+          adminId: data.adminId,
+          contactId: data.contactId,
+          createdAt: data.createdAt?.toDate() || new Date(), // Converte Timestamp para Date
+        };
+      });
+
+      setHistory(historyData);
+      setLoading(false);
+    }, (error) => {
+      console.error("Erro ao buscar histórico de conversas: ", error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   return (
-    <div className="space-y-6">
-       <header className="space-y-1.5">
-          <h1 className="text-2xl font-headline font-semibold">Histórico de Interações</h1>
-          <p className="text-muted-foreground">
-            Um registro de todas as interações com os contatos no sistema.
-          </p>
-        </header>
-
-        <Card>
-            <CardHeader>
-                <CardTitle className="font-headline">Últimas Atividades</CardTitle>
-                <CardDescription>Visão geral de todos os pontos de contato.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Contato</TableHead>
-                            <TableHead>Administrador</TableHead>
-                            <TableHead>Tipo</TableHead>
-                            <TableHead>Detalhes</TableHead>
-                            <TableHead>Data</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {interactionsData.map((interaction) => {
-                            const contact = getContactById(interaction.contactId);
-                            const admin = getAdminById(interaction.adminId);
-                            return (
-                                <TableRow key={interaction.id}>
-                                    <TableCell>
-                                        <div className="flex items-center gap-3">
-                                            <Avatar>
-                                                <AvatarImage src={`https://picsum.photos/seed/${contact?.id}/40/40`} data-ai-hint="profile picture" />
-                                                <AvatarFallback>{contact?.name.charAt(0)}</AvatarFallback>
-                                            </Avatar>
-                                            <span className="font-medium">{contact?.name || 'N/A'}</span>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge variant="outline">{admin?.name || 'N/A'}</Badge>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center gap-2">
-                                            {interactionIcons[interaction.type]}
-                                            <span>{interaction.type}</span>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell className="text-muted-foreground">{interaction.notes}</TableCell>
-                                    <TableCell className="text-muted-foreground">{new Date(interaction.timestamp).toLocaleString('pt-BR')}</TableCell>
-                                </TableRow>
-                            )
-                        })}
-                    </TableBody>
-                </Table>
-            </CardContent>
-        </Card>
+    <div className="space-y-4">
+      <Heading 
+        title={`Histórico de Chats (${loading ? '...' : history.length})`}
+        description="Visualize todas as conversas iniciadas na plataforma."
+      />
+      <Separator />
+      {loading ? (
+        <div className="flex justify-center items-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={history}
+          searchKey="contactName"
+          placeholder="Filtrar por nome do contato..."
+          emptyMessage="Nenhum histórico de conversa encontrado."
+        />
+      )}
     </div>
   );
 }

@@ -23,9 +23,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Edit, MoreHorizontal, Trash, Copy } from 'lucide-react';
 import { ContactColumn } from './columns';
-
-// TODO: A lógica de exclusão real precisa ser implementada no contactService
-// e conectada aqui. Por enquanto, a exclusão é simulada.
+import { deleteContact } from '@/services/contactService'; // Importa a função de exclusão real
 
 interface CellActionProps {
   data: ContactColumn;
@@ -47,18 +45,24 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
 
   const onDeleteConfirm = async () => {
     setLoading(true);
-    console.log(`Simulando a exclusão do contato com ID: ${data.id}`);
-    
-    // Simulação de uma chamada de API bem-sucedida
-    setTimeout(() => {
+    try {
+      await deleteContact(data.id); // Chama a função de exclusão real
+      toast({
+        title: 'Contato Excluído',
+        description: `O contato "${data.name}" foi removido com sucesso.`,
+      });
+      router.refresh(); // Atualiza a tabela para remover a linha
+    } catch (error) {
+      console.error("Falha ao excluir contato: ", error);
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao Excluir',
+        description: 'Não foi possível remover o contato. Tente novamente.',
+      });
+    } finally {
       setLoading(false);
       setOpenAlert(false);
-      toast({
-        title: 'Contato Excluído (Simulação)',
-        description: `O contato "${data.name}" foi removido.`,
-      });
-      router.refresh(); // Atualiza a tabela de contatos
-    }, 1000);
+    }
   };
 
   return (

@@ -1,8 +1,8 @@
 import { db } from "@/lib/firebase";
-import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, setDoc } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, deleteDoc } from "firebase/firestore";
 import type { Contact } from "@/lib/types";
 
-// ATUALIZADO: Reflete o Modelo de Dados Canônico
+// Definição do payload para criar um novo contato.
 export type NewContactPayload = {
   name: string;
   email: string;
@@ -14,32 +14,20 @@ export type NewContactPayload = {
 };
 
 /**
- * Cria um novo contato e a conversa inicial associada a ele.
- * @param contactData - Os dados do novo contato.
+ * Cria um novo contato no banco de dados.
+ * @param contactData - Os dados do novo contato, incluindo o ownerId (o admin).
  * @returns O ID do contato recém-criado.
  */
 export async function createContact(contactData: NewContactPayload): Promise<string> {
   try {
-    // Passo 1: Salvar o novo contato na coleção principal 'contacts'
     const contactDocRef = await addDoc(collection(db, "contacts"), {
       ...contactData,
       createdAt: serverTimestamp(),
     });
-
-    // Passo 2: Criar o documento de conversa inicial
-    const conversationRef = doc(db, `users/${contactData.ownerId}/conversations`, contactDocRef.id);
-    await setDoc(conversationRef, {
-      name: contactData.name,
-      lastMessage: "Inicie a conversa!",
-      lastMessageTimestamp: serverTimestamp(),
-      unreadCount: 0,
-      contactId: contactDocRef.id
-    });
-
     return contactDocRef.id;
   } catch (error) {
-    console.error("Erro ao criar contato e conversa inicial: ", error);
-    throw new Error("Falha ao salvar o contato e iniciar a conversa no banco de dados.");
+    console.error("Erro ao criar contato: ", error);
+    throw new Error("Falha ao salvar o contato no banco de dados.");
   }
 }
 
@@ -54,9 +42,28 @@ export async function getContactGroups(adminUid: string): Promise<string[]> {
     const groups = new Set<string>();
     querySnapshot.forEach(doc => {
         const data = doc.data();
-        if (data.group) { // Esta lógica pode precisar de ajuste ou ser removida
+        if (data.group) {
             groups.add(data.group);
         }
     });
     return Array.from(groups);
+}
+
+/**
+ * Deleta um contato do banco de dados.
+ * @param contactId O ID do contato a ser deletado.
+ * @throws Lança um erro se a exclusão falhar.
+ */
+export async function deleteContact(contactId: string): Promise<void> {
+  if (!contactId) {
+    throw new Error('O ID do contato é obrigatório para a exclusão.');
+  }
+  try {
+    // O caminho correto para os contatos é na coleção 'contacts'
+    const contactRef = doc(db, 'contacts', contactId);
+    await deleteDoc(contactRef);
+  } catch (error) {
+    console.error("Erro ao deletar contato: ", error);
+    throw new Error("Falha ao deletar o contato.");
+  }
 }

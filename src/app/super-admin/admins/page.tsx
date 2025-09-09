@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, query } from 'firebase/firestore'; // Removido o 'where' que causava o erro
 import { db } from '@/lib/firebase';
 
 import { Heading } from "@/components/ui/heading";
@@ -15,17 +15,24 @@ export default function SuperAdminAdminsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const q = query(collection(db, 'users'), where('role', '==', 'admin'));
+    // CORREÇÃO: Busca TODOS os usuários, sem a cláusula 'where' que requer um índice inexistente.
+    const q = query(collection(db, 'users'));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const usersData: AdminUser[] = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...(doc.data() as Omit<AdminUser, 'id'>),
-      }));
+      const usersData: AdminUser[] = snapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...(doc.data() as Omit<AdminUser, 'id'>),
+        }))
+        // CORREÇÃO: Filtra os resultados AQUI no código, em vez de na consulta ao banco de dados.
+        // Isso garante que a página funcione imediatamente, sem depender de configurações externas.
+        .filter(user => user.role === 'admin');
+
       setAdmins(usersData);
       setLoading(false);
     }, (error) => {
-      console.error("Error fetching admin users: ", error);
+      // Em caso de erro, garante que a tela não fique em loading infinito.
+      console.error("Erro ao buscar usuários para filtrar admins: ", error);
       setLoading(false);
     });
 
@@ -35,7 +42,7 @@ export default function SuperAdminAdminsPage() {
   return (
     <div className="space-y-4">
       <Heading 
-        title={`Usuários Administradores (${admins.length})`}
+        title={`Usuários Administradores (${loading ? '...' : admins.length})`}
         description="Gerencie os usuários com permissão de administrador."
       />
       <Separator />

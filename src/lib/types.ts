@@ -1,87 +1,68 @@
-/**
- * @fileoverview
- * Este arquivo define os tipos de dados centrais usados em toda a aplicação OmniFlow AI.
- * Ele formaliza os papéis de usuário e as estruturas de dados para garantir consistência
- * e permissões corretas em todo o sistema.
- */
+
+import { Timestamp } from "firebase/firestore";
 
 /**
- * # Tipos de Usuário na Aplicação
- * A aplicação distingue dois papéis de usuário principais, cada um com acesso e
- * responsabilidades distintas, modelados pela analogia de um "Shopping Center".
- *
- * ## 1. Super Administrador (Dono do Shopping)
- * - **Descrição**: É o "Dono" ou "Gerente Geral" do sistema. Ele tem acesso e controle total sobre o aplicativo.
- * - **Acesso**: Acessa um painel de controle global (`/super-admin/*`).
- * - **Responsabilidades**:
- *   - Gerencia todos os outros usuários (Administradores).
- *   - Visualiza e gerencia **todos** os contatos de **todos** os administradores no sistema.
- *   - Configura a IA "pública" ou global.
- *   - Atua também como um Administrador Comum para sua própria lista de contatos.
- *
- * ## 2. Administrador Comum (Dono de Loja)
- * - **Descrição**: É um "Vendedor" ou "Atendente". Ele tem uma visão restrita, focada apenas em seus próprios recursos.
- * - **Acesso**: Acessa um painel de controle individual (`/admin/*`).
- * - **Responsabilidades**:
- *   - Gerencia **apenas** sua própria lista de contatos/clientes. Não pode ver os contatos de outros administradores.
- *   - Configura sua própria "persona" de IA para atender seus contatos.
- *   - O link de atendimento para seus clientes é único (ex: `dominio.com/chat/{seu-id-de-admin}`).
- *
- * ## 3. Usuário Final (Cliente)
- * - **Descrição**: Um cliente ou visitante externo que interage com o assistente de IA.
- * - **Acesso**: Acessa as páginas de chat públicas (ex: `/chat/id-do-admin`). Não possui login.
- * - **Responsabilidades**: Conversar com a IA para obter suporte ou informações.
- */
-export type UserRole = 'superadmin' | 'admin';
-
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-  avatar?: string;
-  createdAt?: any; 
-  contactGroups?: string[];
-  aiPrompt?: string;
-}
-
-/**
- * Representa um lead ou cliente final na lista de um administrador.
- * ESTA É A DEFINIÇÃO CANÔNICA DE UM CONTATO.
+ * Modelo Canônico para um Contato (Lead) na plataforma.
+ * Representa a fonte de verdade para os dados de um contato.
  */
 export interface Contact {
-  id: string;
-  ownerId: string;
+  id: string; // ID do documento no Firestore
+  ownerId: string; // UID do admin a quem este contato pertence
   name: string;
   email: string;
-  whatsapp: string;
-  phone: string;
-  status: 'active' | 'inactive';
-  interesses: string[];
-  createdAt?: any;
+  phone?: string; // Número de telefone principal
+  whatsapp?: string; // Número de WhatsApp, pode ser diferente do phone
+  status: 'active' | 'inactive' | 'archived'; // Status do lead
+  interesses: string[]; // Lista de interesses ou tags
+  ownerName?: string; // Nome do admin (denormalizado para eficiência)
+  createdAt: Date | Timestamp; // Data de criação do contato
+  lastInteraction?: Date | Timestamp; // Data da última interação significativa
+  canal?: string; // Canal de origem (ex: 'site', 'whatsapp', 'manual')
+  group?: string; // Grupo ou campanha ao qual o contato pertence
 }
 
 /**
- * Representa uma sessão de chat passada no histórico.
+ * Representa a informação de um formulário de captura de leads.
  */
-export interface ChatSession {
+export interface Form {
   id: string;
-  user: string;
-  date: string;
-  status: 'Resolvido' | 'Aberto' | 'Abandonado';
-  snippet: string;
-}
-
-/**
- * Representa uma interação específica (chat, ligação, email) com um contato.
- */
-export interface ContactInteraction {
-  id: string;
-  contactId: string;
   adminId: string;
-  type: 'Chat' | 'Ligação' | 'Email';
-  timestamp: string;
-  notes: string;
+  title: string;
+  description: string;
+  fields: FormField[];
+  createdAt: Date;
+}
+
+/**
+ * Define um campo individual dentro de um formulário.
+ */
+export interface FormField {
+  name: string;
+  label: string;
+  type: 'text' | 'email' | 'tel' | 'textarea';
+  required: boolean;
+}
+
+/**
+ * Define a estrutura para um Webhook.
+ */
+export interface Webhook {
+  id: string;
+  url: string;
+  eventName: string; // Ex: 'contact_created', 'message_received'
+  adminId: string;
+  createdAt: Date;
+}
+
+/**
+ * Representa as configurações de um administrador.
+ */
+export interface AdminSettings {
+  id: string; // Geralmente o mesmo que o adminId
+  aiName: string;
+  aiInstruction: string;
+  companyName: string;
+  companyInfo: string;
 }
 
 /**
@@ -119,12 +100,18 @@ export interface ActiveChat {
 
 /**
  * Representa um item na lista de conversas do componente de chat.
+ * ESTA É A INTERFACE PRINCIPAL DO DOCUMENTO DE CONVERSA.
  */
 export interface Conversation {
-  id: string;
-  path: string;
-  name: string;
+  id?: string; // O ID é o do documento, pode não estar no corpo dos dados
+  path?: string; // O path é contextual, não é um campo do DB
+  name?: string; // O nome do contato, pode ser denormalizado
   lastMessage: string;
-  unreadCount: number;
+  unreadCount?: number;
   lastMessageTimestamp?: any;
+  adminId: string;
+  contactId?: string; // ID do contato após identificação
+  // Status da conversa, crucial para o fluxo da IA
+  status: 'anonymous' | 'pending_identification' | 'active' | 'closed' | 'expired';
+  createdAt: any;
 }
