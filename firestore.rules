@@ -3,59 +3,53 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Função auxiliar para verificar se o usuário é um superadmin.
-    function isSuperAdmin() {
-      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'superadmin';
-    }
-    
-    // Função para validar a estrutura de um Contato
-    function isContactDataValid() {
-      let data = request.resource.data;
-      return data.name is string &&
-             data.email is string &&
-             data.whatsapp is string &&
-             data.phone is string &&
-             data.status is string && (data.status == 'active' || data.status == 'inactive') &&
-             data.interesses is list &&
-             data.ownerId is string;
+    // HELPER FUNCTIONS
+    function getUserData(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data;
     }
 
-    // Regras para a coleção 'users'
+    function isSuperAdmin(userId) {
+      // This function requires that the rules allow reading the user's document.
+      return getUserData(userId).role == 'superadmin';
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    // MASTER RULE: A Super Admin can read and write ANY document.
+    // This is a fallback, more specific rules below will override this.
+    match /{document=**} {
+      allow read, write: if isSignedIn() && isSuperAdmin(request.auth.uid);
+    }
+
+    // Users:
+    // Owners can read/write their own profiles.
+    // Super Admins can ALSO read/write any user profile. THIS IS THE FIX.
     match /users/{userId} {
-      allow read, write: if request.auth.uid == userId || isSuperAdmin();
-      allow read: if userId == 'superadmin';
+      allow read, write: if isSignedIn() && (isOwner(userId) || isSuperAdmin(request.auth.uid));
+    }
 
-      // Sub-coleções de users (exceto contatos, que agora é raiz)
-      match /ai-configs/{configId} {
-        allow read, write: if request.auth.uid == userId || isSuperAdmin();
+    // Global Conversation Collection
+    match /conversations/{conversationId} {
+      // ANY user (even anonymous) can create a conversation.
+      allow create: if request.resource.data.keys().hasAll(['adminId', 'contactId', 'contactName', 'lastMessage']);
+      
+      // The owner (admin) of the conversation can read, update, and delete.
+      // Super Admins are already covered by the master rule.
+      allow read, update, delete: if isSignedIn() && isOwner(resource.data.adminId);
+
+      // Messages within a conversation
+      match /messages/{messageId} {
+        // Reading messages is public within the conversation.
+        allow read: if true;
+        // The conversation admin or anonymous visitor can create messages.
+        allow create: if (isSignedIn() && isOwner(get(/databases/$(database)/documents/conversations/$(conversationId)).data.adminId)) || request.auth == null;
       }
-      match /groups/{groupId} {
-        allow read, write: if request.auth.uid == userId || isSuperAdmin();
-      }
-    }
-
-    // --- NOVA REGRA PARA A COLEÇÃO RAIZ 'contacts' ---
-    match /contacts/{contactId} {
-      // LEITURA, ATUALIZAÇÃO, DELEÇÃO: Permitido para o dono do contato ou superadmin.
-      allow read, update, delete: if request.auth != null && (resource.data.ownerId == request.auth.uid || isSuperAdmin());
-
-      // CRIAÇÃO:
-      // 1. Permitido para qualquer usuário logado (admin/superadmin) que passe dados válidos.
-      // 2. Permitido para visitantes anônimos (leads do chat) que passem dados válidos.
-      allow create: if (request.auth != null || request.auth == null) && isContactDataValid();
-    }
-
-    // Regra para o super-admin poder listar todos os contatos.
-    match /{path=**}/contacts/{contactId} {
-      allow read: if isSuperAdmin();
-    }
-
-    // Regras para sessões de chat e mensagens (sem alterações)
-    match /chatSessions/{sessionId} {
-      allow read, write: if request.auth != null && (resource.data.adminId == request.auth.uid || isSuperAdmin());
-    }
-    match /chats/{chatId}/messages/{messageId} {
-      allow read, write: if true;
     }
   }
 }
