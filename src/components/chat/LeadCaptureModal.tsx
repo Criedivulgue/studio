@@ -11,7 +11,7 @@ import { Loader2 } from 'lucide-react';
 
 interface LeadCaptureModalProps {
   open: boolean;
-  onOpenChange: (open: boolean) => void; // <-- ADICIONADO: Permite que o componente pai controle o estado.
+  onOpenChange: (open: boolean) => void;
   adminUid: string;
   onSuccess: (contact: Contact) => void;
 }
@@ -25,11 +25,11 @@ export function LeadCaptureModal({ open, onOpenChange, adminUid, onSuccess }: Le
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !email) {
+    if (!name || !email || !whatsapp) { // GARANTIDO: WhatsApp agora é obrigatório
       toast({
         variant: 'destructive',
         title: 'Campos obrigatórios',
-        description: 'Por favor, preencha pelo menos o nome e o e-mail.',
+        description: 'Por favor, preencha nome, e-mail e WhatsApp.', // GARANTIDO: Mensagem de erro atualizada
       });
       return;
     }
@@ -41,7 +41,7 @@ export function LeadCaptureModal({ open, onOpenChange, adminUid, onSuccess }: Le
         name,
         email,
         whatsapp,
-        phone: '',
+        phone: '', // O tipo Contact espera um campo `phone`, então mantemos como string vazia por enquanto
         status: 'active' as const,
         interesses: [],
       };
@@ -70,8 +70,6 @@ export function LeadCaptureModal({ open, onOpenChange, adminUid, onSuccess }: Le
   };
 
   return (
-    // O `onOpenChange` é passado aqui. O Dialog agora notificará o pai quando deve ser fechado.
-    // A propriedade `onInteractOutside` foi removida para permitir o fechamento ao clicar fora.
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <form onSubmit={handleSubmit}>
@@ -99,7 +97,7 @@ export function LeadCaptureModal({ open, onOpenChange, adminUid, onSuccess }: Le
             />
             <Input
               id="whatsapp"
-              placeholder="Seu WhatsApp (opcional)"
+              placeholder="Seu WhatsApp *" // GARANTIDO: Placeholder atualizado
               value={whatsapp}
               onChange={(e) => setWhatsapp(e.target.value)}
               disabled={isLoading}

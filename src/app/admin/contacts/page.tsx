@@ -3,23 +3,17 @@
 
 import { useState, useEffect } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query } from 'firebase/firestore';
+import { collection, onSnapshot, query, where } from 'firebase/firestore'; // Importa 'where'
 import { useAuth } from '@/hooks/use-auth';
 
 import { Button } from "@/components/ui/button";
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
 import { Plus, Loader2 } from 'lucide-react';
-import { DataTable } from '@/components/data-table'; // Reutilizando o componente de tabela
-import { columns } from './_components/columns'; // Colunas específicas para contatos
+import { DataTable } from '@/components/data-table';
+import { columns } from './_components/columns';
+import type { Contact } from '@/lib/types'; // Usa o tipo global
 
-// Definindo a interface para um contato
-interface Contact {
-  id: string;
-  name: string;
-  phone: string;
-  status: 'active' | 'inactive';
-}
 
 export default function AdminContactsPage() {
   const { user } = useAuth();
@@ -32,7 +26,8 @@ export default function AdminContactsPage() {
       return;
     }
 
-    const q = query(collection(db, `users/${user.uid}/contacts`));
+    // CORREÇÃO: Busca na coleção global 'contacts' filtrando por 'ownerId'
+    const q = query(collection(db, 'contacts'), where('ownerId', '==', user.uid));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const contactsData: Contact[] = snapshot.docs.map(doc => ({
