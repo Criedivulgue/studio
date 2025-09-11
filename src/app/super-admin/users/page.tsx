@@ -6,16 +6,19 @@ import { db } from '@/lib/firebase';
 
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
-import { DataTable } from '@/components/data-table';
+// CORREÇÃO: Importando a função factory em vez do componente diretamente.
+import { createDataTable } from '@/components/data-table';
 import { Loader2 } from 'lucide-react';
-import { User, columns } from './_components/columns'; // Reutilizando a definição de coluna, se aplicável, ou crie uma nova.
+import { User, columns } from './_components/columns';
+
+// CORREÇÃO: Criando uma instância da DataTable com o tipo específico User.
+const UserDataTable = createDataTable<User, any>();
 
 export default function SuperAdminUsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Busca todos os documentos da coleção 'users' em tempo real.
     const q = query(collection(db, 'users'));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -27,10 +30,9 @@ export default function SuperAdminUsersPage() {
       setLoading(false);
     }, (error) => {
       console.error("Erro ao buscar todos os usuários: ", error);
-      setLoading(false); // Garante que a página não trave em loading
+      setLoading(false);
     });
 
-    // Limpa o listener ao desmontar o componente.
     return () => unsubscribe();
   }, []);
 
@@ -46,10 +48,11 @@ export default function SuperAdminUsersPage() {
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <DataTable
+        // CORREÇÃO: Utilizando a instância da DataTable fortemente tipada.
+        <UserDataTable
           columns={columns}
           data={users}
-          searchKey="name" // Assumindo que a busca principal será por nome
+          searchKey="name"
           placeholder="Filtrar por nome..."
           emptyMessage="Nenhum usuário encontrado."
         />

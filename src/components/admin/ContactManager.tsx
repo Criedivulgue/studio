@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { MoreHorizontal, Search, Upload, Download, Loader2 } from 'lucide-react';
+import { MoreHorizontal, Search, Upload, Download, Loader2, Plus } from 'lucide-react'; // Adicionado o ícone Plus
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
@@ -25,6 +25,8 @@ export function ContactManager({ title, description }: ContactManagerProps) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  // CORREÇÃO: Estado para controlar a visibilidade do modal
+  const [isAddContactModalOpen, setAddContactModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchDummyData = () => {
@@ -34,6 +36,13 @@ export function ContactManager({ title, description }: ContactManagerProps) {
     }
     fetchDummyData();
   }, [user?.id]);
+
+  // CORREÇÃO: Função de callback para quando um contato é adicionado com sucesso
+  const handleAddContactSuccess = () => {
+    setAddContactModalOpen(false); // Fecha o modal
+    toast({ title: "Sucesso", description: "Contato adicionado." });
+    // Aqui, você pode adicionar a lógica para recarregar a lista de contatos, se necessário
+  };
 
   const filteredContacts = contacts.filter(
     (contact) =>
@@ -57,15 +66,29 @@ export function ContactManager({ title, description }: ContactManagerProps) {
             <Download className="h-4 w-4" />
             Exportar
           </Button>
-          {user && <AddContactModal adminUid={user.id} onSuccess={() => {}} />}
+          {/* CORREÇÃO: Botão para abrir o modal */}
+          <Button onClick={() => setAddContactModalOpen(true)} size="sm" className="gap-1.5">
+            <Plus className="h-4 w-4" />
+            Adicionar Contato
+          </Button>
         </div>
       </div>
+
+      {/* CORREÇÃO: Instância do modal com as props necessárias */}
+      {user && (
+        <AddContactModal 
+          isOpen={isAddContactModalOpen} 
+          onClose={() => setAddContactModalOpen(false)} 
+          adminUid={user.id} 
+          onSuccess={handleAddContactSuccess} 
+        />
+      )}
 
       <Card>
         <CardHeader>
           <div className='flex flex-col justify-between gap-4 sm:flex-row sm:items-center'>
             <div>
-              <CardTitle className='font-headline'>Teste de Cache - Você Vê Isso?</CardTitle>
+              <CardTitle className='font-headline'>Contatos</CardTitle>
               <CardDescription>{filteredContacts.length} contatos encontrados.</CardDescription>
             </div>
             <div className='relative'>

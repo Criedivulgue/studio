@@ -15,8 +15,6 @@ export default function SuperAdminLiveChatPage() {
         );
     }
 
-    // Se o carregamento terminou, mas não há usuário, mostra um erro.
-    // Isso não deve acontecer em uma rota protegida, mas é uma boa prática.
     if (!user) {
         return (
             <div className="flex flex-col items-center justify-center h-full text-destructive">
@@ -26,7 +24,6 @@ export default function SuperAdminLiveChatPage() {
         )
     }
 
-    // Passa o objeto de usuário real para o componente Chat.
     return (
         <div className="h-full">
             <Chat user={user} />

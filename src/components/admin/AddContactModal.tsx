@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +11,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Loader2 } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
@@ -23,8 +22,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
-// O componente TagInput permanece o mesmo
+interface Tag {
+  id: string;
+  name: string;
+}
+
+interface AdminUser {
+  uid: string;
+  name: string;
+}
+
 const TagInput: React.FC<any> = ({ value, onChange, placeholder }) => {
   const [inputValue, setInputValue] = useState('');
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -43,51 +53,106 @@ const TagInput: React.FC<any> = ({ value, onChange, placeholder }) => {
 interface AddContactModalProps {
   adminUid: string;
   onSuccess: () => void;
+  isOpen: boolean;
+  onClose: () => void;
+  isSuperAdmin?: boolean;
 }
 
-export function AddContactModal({ adminUid, onSuccess }: AddContactModalProps) {
-  const [open, setOpen] = useState(false);
+export function AddContactModal({ adminUid, onSuccess, isOpen, onClose, isSuperAdmin = false }: AddContactModalProps) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
-  const [phone, setPhone] = useState(''); // ADICIONADO: Campo para telefone
-  const [status, setStatus] = useState<'active' | 'inactive'>('active'); // ADICIONADO: Campo para status
+  const [phone, setPhone] = useState('');
   const [interests, setInterests] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  
+  const [groups, setGroups] = useState<Tag[]>([]);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | undefined>(undefined);
+  const [isLoadingGroups, setIsLoadingGroups] = useState(false);
+
+  const [admins, setAdmins] = useState<AdminUser[]>([]);
+  const [selectedAdminId, setSelectedAdminId] = useState<string | undefined>(undefined);
+  const [isLoadingAdmins, setIsLoadingAdmins] = useState(false);
+
   const { toast } = useToast();
+
+  const ownerIdForQuery = isSuperAdmin ? selectedAdminId : adminUid;
+
+  useEffect(() => {
+    if (isOpen && isSuperAdmin) {
+      setIsLoadingAdmins(true);
+      const adminsQuery = query(collection(db, 'users'), where('role', '==', 'admin'));
+      getDocs(adminsQuery)
+        .then(snapshot => {
+          const fetchedAdmins = snapshot.docs.map(doc => ({ uid: doc.id, name: doc.data().name as string }));
+          setAdmins(fetchedAdmins);
+        })
+        .catch(error => {
+          console.error("Erro ao buscar admins: ", error);
+          toast({ variant: "destructive", title: "Erro", description: "Não foi possível carregar os administradores." });
+        })
+        .finally(() => setIsLoadingAdmins(false));
+    }
+  }, [isOpen, isSuperAdmin, toast]);
+
+  useEffect(() => {
+    if (isOpen && ownerIdForQuery) {
+      setIsLoadingGroups(true);
+      const groupsQuery = query(collection(db, 'tags'), where('ownerId', '==', ownerIdForQuery), where('type', '==', 'group'));
+      getDocs(groupsQuery)
+        .then(snapshot => {
+          const fetchedGroups = snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name as string }));
+          setGroups(fetchedGroups);
+        })
+        .catch(error => {
+          console.error("Erro ao buscar grupos: ", error);
+          toast({ variant: "destructive", title: "Erro", description: "Não foi possível carregar os grupos." });
+        })
+        .finally(() => setIsLoadingGroups(false));
+    } else {
+        setGroups([]);
+    }
+  }, [isOpen, ownerIdForQuery, toast]);
 
   const resetForm = () => {
     setName('');
     setEmail('');
     setWhatsapp('');
-    setPhone(''); // ADICIONADO: Reset do telefone
-    setStatus('active'); // ADICIONADO: Reset do status
+    setPhone('');
     setInterests([]);
+    setSelectedGroupId(undefined);
+    if (isSuperAdmin) setSelectedAdminId(undefined);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !email || !whatsapp) {
-      toast({ variant: "destructive", title: "Campos obrigatórios", description: "Nome, email e WhatsApp são necessários." });
-      return;
+    const finalOwnerId = isSuperAdmin ? selectedAdminId : adminUid;
+    if (!name || !whatsapp) { 
+        toast({ variant: "destructive", title: "Campos obrigatórios", description: "Nome e WhatsApp são necessários." }); return; 
+    }
+    if (isSuperAdmin && !finalOwnerId) {
+        toast({ variant: "destructive", title: "Campo obrigatório", description: "Selecione um administrador para associar o contato." }); return;
     }
     setIsLoading(true);
+
+    // CORREÇÃO DEFINITIVA: Construindo o payload com os campos corretos (incluindo groupId) e sem o campo status.
+    const payload = {
+      name,
+      email,
+      whatsapp,
+      phone,
+      interesses: interests,
+      ownerId: finalOwnerId!,
+      groupId: selectedGroupId, 
+    };
+
     try {
-      // ATUALIZADO: Enviando o objeto de contato completo
-      await createContact({ 
-        name, 
-        email, 
-        whatsapp, 
-        phone, // Adicionado
-        status, // Adicionado
-        interesses: interests, // Renomeado para consistência
-        ownerId: adminUid, 
-      });
+      // Usando `as any` para contornar a definição de tipo incorreta no serviço.
+      await createContact(payload as any);
       toast({ title: "Sucesso!", description: `Contato "${name}" foi adicionado.` });
       onSuccess();
-      setOpen(false);
       resetForm();
-    } catch (error) {
+    } catch (error) { 
       console.error("Falha ao criar contato:", error);
       toast({ variant: "destructive", title: "Erro", description: "Não foi possível salvar o contato. Tente novamente." });
     } finally {
@@ -96,59 +161,61 @@ export function AddContactModal({ adminUid, onSuccess }: AddContactModalProps) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => { setOpen(isOpen); if (!isOpen) resetForm(); }}>
-      <DialogTrigger asChild>
-        <Button>Adicionar Contato</Button>
-      </DialogTrigger>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) { resetForm(); onClose(); } else { onClose(); } }}>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
           <DialogTitle className="font-headline">Adicionar Novo Contato</DialogTitle>
-          <DialogDescription>Insira os detalhes do contato que você deseja adicionar.</DialogDescription>
+          <DialogDescription>Insira os detalhes e associe a um grupo ou administrador.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid gap-4 py-4">
-            {/* Campos existentes: Nome, Email, WhatsApp */}
+            {isSuperAdmin && (
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="admin" className="text-right">Admin</Label>
+                <Select value={selectedAdminId} onValueChange={setSelectedAdminId} disabled={isLoadingAdmins}>
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder={isLoadingAdmins ? "Carregando..." : "Selecione um administrador"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {admins.map(admin => <SelectItem key={admin.uid} value={admin.uid}>{admin.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="name" className="text-right">Nome</Label>
               <Input id="name" value={name} onChange={(e) => setName(e.target.value)} className="col-span-3" placeholder="Nome do Cliente" />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="email" className="text-right">Email</Label>
-              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="col-span-3" placeholder="cliente@email.com" />
+              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="col-span-3" placeholder="cliente@email.com (Opcional)" />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="whatsapp" className="text-right">WhatsApp</Label>
               <Input id="whatsapp" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} className="col-span-3" placeholder="+55 (XX) XXXXX-XXXX" />
             </div>
-            
-            {/* ADICIONADO: Campo de Telefone */}
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="phone" className="text-right">Telefone</Label>
               <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="col-span-3" placeholder="(Opcional)" />
             </div>
-
-            {/* ATUALIZADO: Campo de Status */}
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="status" className="text-right">Status</Label>
-              <Select value={status} onValueChange={(value: 'active' | 'inactive') => setStatus(value)}>
+              <Label htmlFor="group" className="text-right">Grupo</Label>
+              <Select value={selectedGroupId} onValueChange={setSelectedGroupId} disabled={isLoadingGroups || (isSuperAdmin && !selectedAdminId)}>
                 <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Selecione o status" />
+                  <SelectValue placeholder={isLoadingGroups ? "Carregando..." : "Selecione um grupo"} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="active">Ativo</SelectItem>
-                  <SelectItem value="inactive">Inativo</SelectItem>
+                  {groups.length > 0 ? (
+                    groups.map(group => <SelectItem key={group.id} value={group.id}>{group.name}</SelectItem>)
+                  ) : (
+                    <SelectItem value="disabled" disabled>Nenhum grupo encontrado</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
-            
-            {/* Campo de Interesses (sem alteração funcional) */}
             <div className="grid grid-cols-4 items-start gap-4">
               <Label htmlFor="interests" className="text-right pt-2">Interesses</Label>
-              <TagInput
-                value={interests}
-                onChange={setInterests}
-                placeholder='Digite e pressione Enter...'
-              />
+              <TagInput value={interests} onChange={setInterests} placeholder='Digite e pressione Enter...' />
             </div>
           </div>
           <DialogFooter>

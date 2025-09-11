@@ -1,8 +1,8 @@
 'use client';
 
 import { db } from '@/lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
-import type { User } from '@/lib/types';
+import { doc, getDoc, updateDoc, PartialWithFieldValue } from 'firebase/firestore';
+import type { PlatformUser, User } from '@/lib/types';
 
 // As funções getSuperAdmin e getSuperAdminUid foram removidas, pois eram os
 // resquícios da arquitetura antiga que causavam o erro de permissão no Firestore,
@@ -31,4 +31,20 @@ export async function getUserData(uid: string): Promise<User | null> {
         // o que é essencial para o fluxo de autenticação.
         return null;
     }
+}
+
+/**
+ * Atualiza as configurações de um usuário no Firestore.
+ * @param userId O ID do usuário a ser atualizado.
+ * @param settings Um objeto com as configurações a serem atualizadas.
+ */
+export async function updateUserSettings(userId: string, settings: Partial<PlatformUser>): Promise<void> {
+  if (!userId) throw new Error("ID do usuário não fornecido para atualização.");
+
+  const userDocRef = doc(db, 'users', userId);
+  
+  // O tipo PartialWithFieldValue<T> do Firebase é mais preciso para operações de atualização
+  const settingsToUpdate: PartialWithFieldValue<PlatformUser> = settings;
+
+  await updateDoc(userDocRef, settingsToUpdate);
 }

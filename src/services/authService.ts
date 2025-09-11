@@ -1,101 +1,134 @@
-import { auth, db } from '@/lib/firebase';
 import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut,
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword, 
+  signOut, 
   onAuthStateChanged,
   User as FirebaseUser
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, updateDoc, deleteField, collection, query, where, getDocs } from 'firebase/firestore';
-import type { User, UserRole } from '@/lib/types';
+import { doc, getDoc, setDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { auth, db } from '@/lib/firebase';
+// CORREÇÃO: Importando PlatformUser e removendo User não utilizado
+import type { PlatformUser, UserRole, PublicProfile } from '@/lib/types';
 
-// Função para verificar se o superadmin já existe.
-export async function checkSuperAdminExists(): Promise<boolean> {
-  const q = query(collection(db, "users"), where("role", "==", "superadmin"));
-  const querySnapshot = await getDocs(q);
-  return !querySnapshot.empty;
-}
-
-// Função de cadastro de usuário
-export async function signUp(email: string, password: string, name: string, role: UserRole = 'admin'): Promise<User> {
+/**
+ * Inscreve um novo usuário, determinando sua função e criando seus documentos.
+ */
+// CORREÇÃO: Retornando PlatformUser e usando os novos tipos
+export async function signUp(email: string, password: string, name: string): Promise<PlatformUser> {
   const userCredential = await createUserWithEmailAndPassword(auth, email, password);
   const firebaseUser = userCredential.user;
 
-  const newUser: User = {
-    id: firebaseUser.uid,
-    name,
-    email: firebaseUser.email!,
-    role,
-    avatar: `https://i.pravatar.cc/40?u=${firebaseUser.uid}`,
-    createdAt: new Date(),
-  };
+  const appStatusRef = doc(db, 'config', 'app_status');
+  const userRef = doc(db, 'users', firebaseUser.uid);
+  const publicProfileRef = doc(db, 'public_profiles', firebaseUser.uid);
 
-  await setDoc(doc(db, "users", firebaseUser.uid), newUser);
-  return newUser;
-}
+  try {
+    // A transação garante que a criação do usuário e a verificação de status sejam atômicas
+    const determinedRole = await runTransaction(db, async (transaction) => {
+      const appStatusDoc = await transaction.get(appStatusRef);
+      let role: UserRole;
 
-// Função de login
-export async function signIn(email: string, password:string): Promise<User> {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    const user = await getUserProfile(userCredential.user.uid);
-    if (!user) {
-        throw new Error('Perfil do usuário não encontrado no Firestore.');
-    }
-    return user;
-}
+      if (!appStatusDoc.exists() || !appStatusDoc.data().initialized) {
+        role = 'superadmin';
+        // CORREÇÃO: Usando a nomenclatura 'superAdminId'
+        transaction.set(appStatusRef, { initialized: true, superAdminId: firebaseUser.uid });
+      } else {
+        role = 'admin';
+      }
+      
+      // CORREÇÃO: Criando um objeto que corresponde a PlatformUser (sem o id, que é a chave do doc)
+      const newUserForDb: Omit<PlatformUser, 'id'> = {
+        name,
+        email: firebaseUser.email!,
+        role,
+        createdAt: new Date(), // Usando new Date() para consistência com o código antigo
+        status: 'active',
+        whatsapp: '',
+        // Propriedades opcionais podem ser omitidas
+      };
 
-// Função de logout
-export async function logout(): Promise<void> {
-  const uid = auth.currentUser?.uid;
-  if (uid) {
-    try {
-      const userDocRef = doc(db, 'users', uid);
-      await updateDoc(userDocRef, { fcmToken: deleteField() });
-    } catch (error) {
-      console.error("Falha ao remover o token FCM durante o logout:", error);
-    }
+      const newPublicProfile: PublicProfile = {
+        displayName: name, 
+        avatarUrl: '',     
+        greeting: 'Olá! Como posso ajudar hoje?',
+        // CORREÇÃO: Usando o uid do firebaseUser como ownerId
+        ownerId: firebaseUser.uid,
+      };
+
+      transaction.set(userRef, newUserForDb);
+      transaction.set(publicProfileRef, newPublicProfile);
+
+      return role;
+    });
+
+    // CORREÇÃO: Construindo e retornando o objeto PlatformUser completo
+    const newUser: PlatformUser = {
+      id: firebaseUser.uid,
+      email: firebaseUser.email!,
+      name,
+      role: determinedRole,
+      createdAt: new Date(),
+      status: 'active',
+      whatsapp: '',
+    };
+    
+    return newUser;
+
+  } catch (error) {
+    console.error('Falha na transação de cadastro:', error);
+    // É uma boa prática relançar o erro para que a UI possa reagir
+    throw new Error('Falha ao criar o usuário e seu perfil no banco de dados.');
   }
+}
+
+/**
+ * Autentica um usuário existente.
+ */
+export async function signIn(email: string, password: string): Promise<FirebaseUser> {
+  const userCredential = await signInWithEmailAndPassword(auth, email, password);
+  return userCredential.user;
+}
+
+/**
+ * Desconecta o usuário atual.
+ */
+export async function logout(): Promise<void> {
   await signOut(auth);
 }
 
 /**
- * A FUNÇÃO CORRETA E CENTRALIZADA PARA BUSCAR DADOS DO USUÁRIO.
- * Busca os dados do perfil de um usuário na coleção "users".
- * @param uid O ID do usuário (Firebase Auth UID).
- * @returns O perfil do usuário ou null se não for encontrado.
+ * Observador de estado de autenticação.
+ * Passa o usuário bruto do Firebase para o callback.
  */
-export async function getUserProfile(uid: string): Promise<User | null> {
-  const userDocRef = doc(db, "users", uid);
-  const userDocSnap = await getDoc(userDocRef);
-
-  if (userDocSnap.exists()) {
-    return { id: userDocSnap.id, ...userDocSnap.data() } as User;
-  }
-  return null;
+export function onAuthChange(callback: (user: FirebaseUser | null) => void): () => void {
+  return onAuthStateChanged(auth, (firebaseUser) => {
+    callback(firebaseUser);
+  });
 }
 
 /**
- * O OBSERVADOR DE AUTENTICAÇÃO CORRIGIDO E ROBUSTO.
- * Ouve as mudanças no estado de autenticação do Firebase e busca o perfil do usuário.
- * AGORA INCLUI UM BLOCO TRY/CATCH para garantir que a aplicação não trave em um
- * estado de loading infinito caso a busca do perfil falhe.
+ * Busca o perfil de usuário do Firestore.
  */
-export function onAuthChange(callback: (user: User | null) => void) {
-  return onAuthStateChanged(auth, async (firebaseUser) => {
-    if (firebaseUser) {
-      try {
-        // Tenta buscar o perfil customizado do usuário.
-        const appUser = await getUserProfile(firebaseUser.uid);
-        callback(appUser);
-      } catch (error) {
-        // SE A BUSCA FALHAR (ex: erro de permissão no Firestore, rede, etc):
-        console.error("Falha catastrófica ao buscar perfil do usuário no onAuthChange:", error);
-        // Informa à aplicação que a autenticação falhou, liberando a tela de loading.
-        callback(null);
-      }
-    } else {
-      // Se o usuário deslogar, limpamos os dados.
-      callback(null);
-    }
-  });
+// CORREÇÃO: Retornando Promise<PlatformUser | null>
+export async function getUserProfile(uid: string): Promise<PlatformUser | null> {
+  const userRef = doc(db, 'users', uid);
+  const userSnap = await getDoc(userRef);
+
+  if (userSnap.exists()) {
+    const data = userSnap.data();
+    // CORREÇÃO: Construindo e retornando um objeto PlatformUser completo
+    return {
+        id: userSnap.id,
+        email: data.email,
+        name: data.name,
+        role: data.role,
+        createdAt: data.createdAt,
+        status: data.status,
+        whatsapp: data.whatsapp,
+        // Garantir que as propriedades opcionais existam ou sejam nulas
+        aiPrompt: data.aiPrompt || '',
+        contactGroups: data.contactGroups || [],
+    } as PlatformUser;
+  }
+  return null;
 }

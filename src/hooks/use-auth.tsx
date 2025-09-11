@@ -4,12 +4,16 @@ import {
   useState, useEffect, createContext, useContext,
   ReactNode, useMemo
 } from 'react';
-import { useRouter } from 'next/navigation'; // 1. Importar o useRouter
+import { useRouter } from 'next/navigation';
 import { onAuthChange, logout } from '@/services/authService';
-import type { User } from '@/lib/types';
+import type { User as AuthUser } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { db, rtdb } from '@/lib/firebase';
+import type { PlatformUser } from '@/lib/types';
+import { ref, onValue, set, onDisconnect, serverTimestamp } from "firebase/database";
 
 interface AuthContextType {
-  user: User | null;
+  user: PlatformUser | null;
   loading: boolean;
   isSuperAdmin: boolean;
   signOut: () => Promise<void>;
@@ -22,33 +26,87 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<PlatformUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const router = useRouter(); // 2. Instanciar o router
+  const router = useRouter();
 
   useEffect(() => {
-    const unsubscribe = onAuthChange((appUser: User | null) => {
-      setUser(appUser);
+    const unsubscribe = onAuthChange(async (authUser: AuthUser | null) => {
+      if (authUser) {
+        const userDocRef = doc(db, "users", authUser.uid);
+        const userDoc = await getDoc(userDocRef);
+
+        if (userDoc.exists()) {
+          const firestoreData = userDoc.data();
+          // CORREÇÃO: Removido 'isOnline' e adicionado campos faltantes para alinhar com o tipo PlatformUser.
+          setUser({ 
+            id: authUser.uid,
+            email: authUser.email ?? '',
+            name: firestoreData.name,
+            role: firestoreData.role,
+            status: firestoreData.status, // Adicionado
+            whatsapp: firestoreData.whatsapp, // Adicionado
+            createdAt: firestoreData.createdAt, // Adicionado
+          });
+        } else {
+          setUser(null);
+        }
+      } else {
+        setUser(null);
+      }
       setLoading(false);
     });
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (!user) return;
+
+    const userStatusDatabaseRef = ref(rtdb, '/status/' + user.id);
+    const connectedRef = ref(rtdb, '.info/connected');
+
+    const listener = onValue(connectedRef, (snap) => {
+      if (snap.val() === true) {
+        set(userStatusDatabaseRef, {
+          isOnline: true,
+          last_changed: serverTimestamp(),
+        });
+        onDisconnect(userStatusDatabaseRef).set({
+          isOnline: false,
+          last_changed: serverTimestamp(),
+        });
+      }
+    });
+
+    return () => {
+      listener();
+      onDisconnect(userStatusDatabaseRef).cancel();
+      set(userStatusDatabaseRef, {
+        isOnline: false,
+        last_changed: serverTimestamp(),
+      });
+    };
+  }, [user]);
+
   const handleSignOut = async () => {
+    if (user) {
+        const userStatusDatabaseRef = ref(rtdb, '/status/' + user.id);
+        await set(userStatusDatabaseRef, {
+            isOnline: false,
+            last_changed: serverTimestamp(),
+        });
+    }
     await logout();
     setUser(null);
-    router.push('/login'); // 3. Redirecionar para a página de login
+    router.push('/login');
   };
 
   const value = useMemo(() => ({
     user,
     loading,
     isSuperAdmin: user?.role === 'superadmin',
-    signOut: handleSignOut, 
-  // Adicionar `router` ao array de dependências do useMemo se ele for usado no `value`,
-  // mas como só é usado em handleSignOut, que é estável, não é estritamente necessário.
-  // A boa prática é garantir que o objeto de contexto seja estável.
-  }), [user, loading, router]);
+    signOut: handleSignOut,
+  }), [user, loading]);
 
   return (
     <AuthContext.Provider value={value}>

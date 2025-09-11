@@ -1,63 +1,67 @@
 'use client';
 
-import { ColumnDef } from '@tanstack/react-table';
-import { Badge } from '@/components/ui/badge';
-import { CellAction } from './cell-action';
+import { ColumnDef } from "@tanstack/react-table";
+import { CellAction } from "./cell-action";
+import { Badge } from "@/components/ui/badge";
 
-// 1. Interface atualizada para incluir EMAIL
-export interface ContactColumn {
+// CORREÇÃO: Adicionado adminId e renomeado phone para whatsapp
+export type SuperAdminContactColumn = {
   id: string;
+  adminId: string; // Necessário para a ação de exclusão
   name: string;
-  email: string; // Adicionado
-  phone: string;
-  whatsapp: string;
-  interesses: string;
-  status: 'active' | 'inactive';
+  whatsapp: string; // Renomeado de 'phone' para consistência
+  groups: string;
+  interests: string;
   adminName: string;
-  adminId: string;
-}
+};
 
-// 2. Definição de colunas atualizada e reordenada
-export const columns: ColumnDef<ContactColumn>[] = [
+export const columns: ColumnDef<SuperAdminContactColumn>[] = [
   {
-    accessorKey: 'name',
-    header: 'Nome do Contato',
+    accessorKey: "name",
+    header: "Nome",
   },
   {
-    accessorKey: 'email', // Adicionado
-    header: 'Email',
+    // CORREÇÃO: Atualizado para 'whatsapp'
+    accessorKey: "whatsapp",
+    header: "WhatsApp",
   },
   {
-    accessorKey: 'whatsapp',
-    header: 'WhatsApp',
+    accessorKey: "adminName",
+    header: "Admin Proprietário",
   },
   {
-    accessorKey: 'phone', // Adicionado
-    header: 'Telefone',
-  },
-  {
-    accessorKey: 'interesses',
-    header: 'Interesses',
-  },
-  {
-    accessorKey: 'adminName',
-    header: 'Admin Proprietário',
-  },
-  {
-    accessorKey: 'status',
-    header: 'Status',
+    accessorKey: "groups",
+    header: "Grupos",
     cell: ({ row }) => {
-      const status = row.original.status;
+      const groups = row.original.groups;
+      if (!groups) return <div className="text-center">-</div>;
       return (
-        <Badge variant={status === 'active' ? 'default' : 'outline'}>
-          {status === 'active' ? 'Ativo' : 'Inativo'}
-        </Badge>
+        <div className="flex flex-wrap gap-1">
+          {groups.split(', ').map(group => (
+            <Badge key={group} variant="secondary">{group}</Badge>
+          ))}
+        </div>
       );
     },
   },
   {
-    id: 'actions',
-    header: 'Ações',
+    accessorKey: "interests",
+    header: "Interesses",
+    cell: ({ row }) => {
+      const interests = row.original.interests;
+      if (!interests) return <div className="text-center">-</div>;
+      return (
+        <div className="flex flex-wrap gap-1">
+          {interests.split(', ').map(interest => (
+            <Badge key={interest} variant="outline">{interest}</Badge>
+          ))}
+        </div>
+      );
+    },
+  },
+  {
+    id: "actions",
+    // CORREÇÃO: Passando os dados para o componente de ação da célula
     cell: ({ row }) => <CellAction data={row.original} />,
   },
 ];

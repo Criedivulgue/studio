@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -20,18 +19,18 @@ export default function DashboardPage() {
   const [dataLoading, setDataLoading] = useState(true);
 
   useEffect(() => {
-    if (!authLoading && user) {
+    // CORREÇÃO: Substituindo todas as ocorrências de user.uid por user.id
+    if (!authLoading && user?.id) {
       const fetchData = async () => {
         setDataLoading(true);
         try {
-          // CORREÇÃO: Trocar todas as instâncias de user.uid por user.id
-          const contactsQuery = query(collection(db, `users/${user.id}/contacts`));
+          const contactsQuery = query(collection(db, 'contacts'), where('ownerId', '==', user.id));
           const contactsSnap = await getDocs(contactsQuery);
           
           const groupsQuery = query(collection(db, `users/${user.id}/groups`));
           const groupsSnap = await getDocs(groupsQuery);
 
-          const chatsQuery = query(collection(db, 'chatSessions'), where('adminId', '==', user.id));
+          const chatsQuery = query(collection(db, 'conversations'), where('adminId', '==', user.id));
           const chatsSnap = await getDocs(chatsQuery);
 
           setStats({
@@ -47,6 +46,8 @@ export default function DashboardPage() {
       };
 
       fetchData();
+    } else if (!authLoading) {
+      setDataLoading(false);
     }
   }, [user, authLoading]);
 

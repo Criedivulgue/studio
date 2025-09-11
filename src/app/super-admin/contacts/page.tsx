@@ -2,151 +2,132 @@
 
 import { useState, useEffect } from 'react';
 import { db } from '@/lib/firebase';
-import { collectionGroup, query, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, getDocs, collectionGroup } from 'firebase/firestore';
 import { useAuth } from '@/hooks/use-auth';
+
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
-import { DataTable } from '@/components/data-table';
+import { createDataTable } from '@/components/data-table';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Upload, Download, Copy, ShieldAlert } from 'lucide-react';
-import { ContactColumn, columns } from './_components/columns';
+import { Loader2, Plus } from 'lucide-react';
 
-// Componente da Página de Contatos do Super Admin
+import { SuperAdminContactColumn, columns } from './_components/columns';
+import { AddContactModal } from '@/components/admin/AddContactModal';
+
+const SuperAdminContactsDataTable = createDataTable<SuperAdminContactColumn, any>();
+
 export default function SuperAdminContactsPage() {
   const { user, loading: authLoading, isSuperAdmin } = useAuth();
-  const [contacts, setContacts] = useState<ContactColumn[]>([]);
+  const [contacts, setContacts] = useState<SuperAdminContactColumn[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const { toast } = useToast();
 
-  useEffect(() => {
-    // A busca só é acionada quando a autenticação termina e o usuário é um superadmin.
-    if (!authLoading && isSuperAdmin) {
-      const fetchAllContacts = async () => {
-        setDataLoading(true);
-        try {
-          // 1. USA A CONSULTA `collectionGroup` CORRETA para buscar todos os contatos da plataforma.
-          const contactsQuery = query(collectionGroup(db, 'contacts'));
-          const querySnapshot = await getDocs(contactsQuery);
+  const fetchAllData = async () => {
+    if (!isSuperAdmin) return;
+    setDataLoading(true);
+    try {
+      const usersSnapshot = await getDocs(query(collection(db, 'users')));
+      const userMap = new Map<string, string>();
+      usersSnapshot.forEach(doc => userMap.set(doc.id, doc.data().name || 'Admin s/ nome'));
 
-          // 2. Otimização: Cria um cache para armazenar os nomes dos admins já buscados.
-          const usersCache = new Map<string, string>();
+      const contactsQuery = collectionGroup(db, 'contacts');
+      const contactsSnapshot = await getDocs(contactsQuery);
 
-          // 3. Processa os contatos para enriquecê-los com os nomes dos admins.
-          const allContacts: ContactColumn[] = await Promise.all(
-            querySnapshot.docs.map(async (contactDoc) => {
-              const contactData = contactDoc.data();
-              const adminId = contactData.ownerId; // O `ownerId` do contato.
-              let adminName = 'Admin não encontrado';
+      const allContactsPromises = contactsSnapshot.docs.map(async (contactDoc) => {
+        const contactData = contactDoc.data();
+        const parentUserRef = contactDoc.ref.parent.parent;
 
-              // Busca o nome do admin, usando o cache para evitar buscas repetidas.
-              if (adminId) {
-                if (usersCache.has(adminId)) {
-                  adminName = usersCache.get(adminId)!;
-                } else {
-                  const userDocRef = doc(db, 'users', adminId);
-                  const userDocSnap = await getDoc(userDocRef);
-                  if (userDocSnap.exists()) {
-                    adminName = userDocSnap.data().name || 'Admin sem nome';
-                    usersCache.set(adminId, adminName);
-                  }
-                }
-              }
-
-              // Retorna o objeto formatado para a tabela.
-              return {
-                id: contactDoc.id,
-                name: contactData.name || 'Nome não informado',
-                email: contactData.email || 'Email não informado',
-                phone: contactData.phone || 'N/A',
-                whatsapp: contactData.whatsapp || 'N/A',
-                interesses: contactData.interesses || [],
-                status: contactData.status || 'active',
-                adminName: adminName,
-                adminId: adminId,
-              };
-            })
-          );
-
-          setContacts(allContacts);
-
-        } catch (error) {
-          console.error("Erro ao buscar contatos com collectionGroup: ", error);
-          toast({
-            variant: "destructive",
-            title: "Erro ao Carregar Contatos",
-            description: "A consulta falhou. Verifique as regras de segurança do Firestore e o console.",
-          });
-        } finally {
-          setDataLoading(false);
+        // CORREÇÃO: Verifica se o contato está aninhado sob um usuário antes de prosseguir.
+        // Isso evita o erro "Cannot read properties of null (reading 'id')" para contatos na raiz.
+        if (!parentUserRef) {
+          return null; 
         }
-      };
 
-      fetchAllContacts();
-    } else if (!authLoading) {
-      // Se não for superadmin, para o loading.
+        const adminId = parentUserRef.id;
+        const adminName = userMap.get(adminId) || 'Admin deletado';
+        
+        const groupNames = (contactData.groupIds || []).join(', ') || 'Sem grupo';
+        const interestNames = (contactData.interestIds || []).join(', ') || 'Sem interesses';
+
+        return {
+          id: contactDoc.id,
+          adminId: adminId,
+          name: contactData.name || 'Nome não informado',
+          whatsapp: contactData.whatsapp || 'N/A',
+          adminName: adminName,
+          groups: groupNames,
+          interests: interestNames,
+        } as SuperAdminContactColumn;
+      });
+
+      const allContacts = (await Promise.all(allContactsPromises)).filter(Boolean) as SuperAdminContactColumn[];
+
+      setContacts(allContacts);
+
+    } catch (error) {
+      console.error("Erro ao buscar dados: ", error);
+      toast({ variant: "destructive", title: "Erro ao Carregar Dados" });
+    } finally {
       setDataLoading(false);
     }
-  }, [authLoading, isSuperAdmin, toast]);
-
-  // Demais funções e renderização do componente (sem alterações)
-
-  const handleCopyChatLink = () => {
-    if (!user) return;
-    const chatUrl = `${window.location.origin}/chat/${user.id}`;
-    navigator.clipboard.writeText(chatUrl).then(() => {
-      toast({ title: "Link do Chat Copiado!", description: "O link foi copiado para a sua área de transferência." });
-    }).catch(() => {
-      toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível copiar o link.' });
-    });
   };
+  
+  useEffect(() => {
+    if (!authLoading && isSuperAdmin) {
+        fetchAllData();
+    } else if (!authLoading && !isSuperAdmin) {
+        setDataLoading(false);
+    }
+  }, [authLoading, isSuperAdmin]);
+
 
   if (authLoading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
 
-  if (!isSuperAdmin) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 bg-background rounded-md border">
-        <ShieldAlert className="h-12 w-12 text-destructive mb-4" />
-        <Heading title="Acesso Negado" description="Você não tem permissão para acessar esta página." />
-        <p className="text-muted-foreground mt-2">Esta área é restrita aos super administradores.</p>
-      </div>
-    );
+  if (!isSuperAdmin || !user) {
+    return <div className="flex justify-center items-center h-64">Acesso Negado</div>;
+  }
+
+  const handleSuccess = () => {
+     setIsModalOpen(false);
+     fetchAllData();
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <Heading
-          title={`Contatos Globais (${dataLoading ? '...' : contacts.length})`}
-          description="Visualize e gerencie todos os contatos da plataforma."
-        />
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleCopyChatLink}>
-            <Copy className="mr-2 h-4 w-4" />
-            Copiar Link do Chat
-          </Button>
-        </div>
-      </div>
-      <Separator />
-      {dataLoading ? (
-        <div className="flex justify-center items-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      ) : (
-        <DataTable
-          columns={columns}
-          data={contacts}
-          searchKey="email"
-          placeholder="Filtrar por email do contato..."
-          emptyMessage="Nenhum contato encontrado na plataforma."
+    <>
+      {user && (
+        <AddContactModal 
+          isOpen={isModalOpen} 
+          onClose={() => setIsModalOpen(false)} 
+          onSuccess={handleSuccess}
+          adminUid={user.id}
+          isSuperAdmin={true}
         />
       )}
-    </div>
+
+      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+        <div className="flex items-center justify-between">
+          <Heading
+            title={`Contatos Globais (${dataLoading ? '...' : contacts.length})`}
+            description="Visualize e gerencie todos os contatos da plataforma."
+          />
+          <Button onClick={() => setIsModalOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" /> Adicionar Contato
+          </Button>
+        </div>
+        <Separator />
+        
+        <SuperAdminContactsDataTable
+          columns={columns}
+          data={contacts}
+          searchKey="name"
+          placeholder="Filtrar por nome do contato..."
+          emptyMessage="Nenhum contato encontrado na plataforma."
+        />
+      </div>
+    </>
   );
 }

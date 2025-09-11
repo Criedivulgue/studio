@@ -1,52 +1,40 @@
+'use client';
 
-'use client'
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
+import type { LucideIcon } from "lucide-react";
 
-import Link from "next/link"
-import { usePathname } from "next/navigation"
+// 1. Definição do tipo para um item de navegação
+export interface NavItem {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+}
 
-import { cn } from "@/lib/utils"
-import { MessageSquare, Users, BookUser, Bot } from 'lucide-react';
+// 2. Props do componente agora esperam um array de NavItems
+interface SidebarNavProps extends React.HTMLAttributes<HTMLElement> {
+  navItems: NavItem[];
+}
 
-const links = [
-  {
-    href: "/super-admin/live-chat",
-    label: "Chat ao Vivo",
-    icon: MessageSquare
-  },
-  {
-    href: "/super-admin/admins",
-    label: "Usuários (Admins)",
-    icon: Users
-  },
-  {
-    href: "/super-admin/contacts",
-    label: "Contatos Globais",
-    icon: BookUser
-  },
-  {
-    href: "/super-admin/history",
-    label: "Histórico",
-    icon: Users
-  },
-  {
-    href: "/super-admin/ai-settings",
-    label: "Configurações da IA",
-    icon: Bot
+export function SidebarNav({ className, navItems, ...props }: SidebarNavProps) {
+  const pathname = usePathname();
+
+  // 3. Verifica se a lista de itens foi fornecida. Se não, não renderiza nada.
+  if (!navItems || navItems.length === 0) {
+    return null;
   }
-];
-
-export function SidebarNav({ className, ...props }: React.HTMLAttributes<HTMLElement>) {
-  const pathname = usePathname()
 
   return (
     <nav
       className={cn(
-        "grid items-start gap-1",
+        "grid items-start gap-1 px-2 text-sm font-medium lg:px-4",
         className
       )}
       {...props}
     >
-      {links.map((link) => {
+      {/* 4. Mapeia a lista recebida via props */}
+      {navItems.map((link) => {
         const Icon = link.icon;
         return (
           <Link
@@ -54,14 +42,15 @@ export function SidebarNav({ className, ...props }: React.HTMLAttributes<HTMLEle
             href={link.href}
             className={cn(
               "flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary",
-              pathname === link.href && "bg-muted text-primary"
+              // Lógica de ativação melhorada para corresponder a sub-rotas
+              pathname.startsWith(link.href) && "bg-muted text-primary"
             )}
           >
             <Icon className="h-4 w-4" />
             {link.label}
           </Link>
-        )
+        );
       })}
     </nav>
-  )
+  );
 }

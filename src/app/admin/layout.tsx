@@ -1,50 +1,44 @@
 'use client';
 
 import { useEffect } from 'react';
-import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useAuth } from "@/hooks/use-auth";
-import { useFirebaseMessaging } from "@/hooks/useFirebaseMessaging";
+import { usePathname, useRouter } from 'next/navigation';
 import {
-  SidebarProvider,
-  Sidebar,
-  SidebarHeader,
-  SidebarContent,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarInset,
-  SidebarTrigger,
-  SidebarFooter,
-} from "@/components/ui/sidebar";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { Logo } from "@/components/logo";
-import { LayoutDashboard, Users, Bot, Settings, LogOut, MessageSquare, Contact, History, Group, Loader2 } from "lucide-react";
-import { logout } from "@/services/authService";
-import { useToast } from "@/hooks/use-toast";
+  LogOut, Loader2, User, Menu
+} from "lucide-react";
 
-const navItems = [
-  { href: "/admin/dashboard", icon: LayoutDashboard, label: "Painel" },
-  { href: "/admin/live-chat", icon: MessageSquare, label: "Chat ao Vivo" },
-  { href: "/admin/contacts", icon: Contact, label: "Meus Contatos" },
-  { href: "/admin/groups", icon: Group, label: "Grupos" },
-  { href: "/admin/history", icon: History, label: "Histórico" },
-  { href: "/admin/ai-config", icon: Bot, label: "Config IA" },
-];
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useFirebaseMessaging } from '@/hooks/useFirebaseMessaging';
+import { useAuth } from '@/hooks/use-auth';
+import { useToast } from '@/hooks/use-toast';
+import { logout } from '@/services/authService';
+import { SidebarNav } from '@/components/sidebar-nav';
+import { adminNavItems } from '@/config/nav-links';
+import { Logo } from '@/components/logo';
+import { CopyChatLinkButton } from '@/components/admin/CopyChatLinkButton';
+import { NotificationBell } from "@/components/notification-bell";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
+  useFirebaseMessaging();
   const router = useRouter();
   const { toast } = useToast();
   const { user, loading } = useAuth();
-  useFirebaseMessaging();
 
   useEffect(() => {
     if (!loading && !user) {
       router.push('/login');
     }
-    if (!loading && user && user.role !== 'admin') {
+    if (!loading && user?.role && !['admin', 'superadmin'].includes(user.role)) {
       toast({ variant: "destructive", title: "Acesso Negado" });
       router.push('/login');
     }
@@ -54,15 +48,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     try {
       await logout();
       toast({ title: "Logout realizado com sucesso!" });
-      router.push("/login");
+      window.location.href = "/login";
     } catch (error) {
       toast({ variant: "destructive", title: "Erro ao fazer logout" });
     }
   };
 
-  // LÓGICA DE RENDERIZAÇÃO CORRIGIDA E FINAL:
-  // Passo 1: Mostrar o loader APENAS enquanto a autenticação estiver em andamento.
-  if (loading) {
+  if (loading || !user?.role) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -70,74 +62,80 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
-  // Passo 2: Se o carregamento terminou e NÃO HÁ usuário, não renderize nada.
-  // O useEffect acima já disparou o redirecionamento para /login.
-  // Isso impede que o layout quebre tentando acessar `user.name` e evita o loader infinito.
-  if (!user) {
-    return null;
-  }
-  
-  // Se chegamos aqui, `loading` é false e `user` existe.
-  // Podemos renderizar o layout com segurança.
-
   return (
-    <SidebarProvider>
-      <Sidebar>
-        <SidebarHeader className="p-4">
-          <Link href="/" className="flex items-center gap-3">
-             <Logo />
-             <span className="font-headline text-lg font-semibold text-sidebar-foreground">OmniFlow AI</span>
-          </Link>
-        </SidebarHeader>
-        <SidebarContent>
-          <SidebarMenu>
-            {navItems.map((item) => (
-              <SidebarMenuItem key={item.href}>
-                <Link href={item.href}>
-                  <SidebarMenuButton isActive={pathname.startsWith(item.href)} tooltip={item.label}>
-                    <item.icon />
-                    <span>{item.label}</span>
-                  </SidebarMenuButton>
-                </Link>
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
-        </SidebarContent>
-        <SidebarFooter className="p-4 flex flex-col gap-4">
-           <div className="flex flex-col gap-2 p-3 rounded-lg bg-sidebar-accent">
-            <h4 className="font-semibold text-sidebar-accent-foreground text-sm">Precisa de Ajuda?</h4>
-            <p className="text-xs text-sidebar-foreground">Confira nossa documentação ou entre em contato com o suporte.</p>
-            <Button size="sm" variant="outline" className="w-full mt-2 bg-transparent border-sidebar-foreground/50 text-sidebar-foreground hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground">Suporte</Button>
+    <div className="grid min-h-screen w-full md:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr]">
+      <div className="hidden border-r bg-muted/40 md:block">
+        <div className="flex h-full max-h-screen flex-col gap-2">
+          <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
+            {/* CORREÇÃO: Link do logo no desktop aponta para a raiz "/" */}
+            <Link href="/" className="flex items-center gap-2 font-semibold">
+              <Logo />
+              <span className="">OmniFlow AI</span>
+            </Link>
           </div>
-          <div className="flex items-center gap-3">
-            <Avatar>
-              <AvatarImage src={user.avatar} />
-              <AvatarFallback>{user.name.charAt(0).toUpperCase()}</AvatarFallback>
-            </Avatar>
-            <div className="flex-1 overflow-hidden">
-                <p className="text-sm font-medium text-sidebar-foreground truncate">{user.name}</p>
-                <p className="text-xs text-sidebar-foreground/70 truncate">{user.email}</p>
-            </div>
-            <Button onClick={handleLogout} variant="ghost" size="icon" className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex-shrink-0">
-                <LogOut className="w-4 h-4"/>
-            </Button>
+          <div className="flex-1 overflow-y-auto">
+            <SidebarNav navItems={adminNavItems} />
           </div>
-        </SidebarFooter>
-      </Sidebar>
-
-      <SidebarInset>
-        <header className="flex items-center justify-between border-b p-4 h-16">
-          <SidebarTrigger />
-          <div className="flex items-center gap-4">
-             <Button variant="outline" size="icon">
-                <Settings className="h-4 w-4" />
-             </Button>
+          <div className="mt-auto p-4 border-t">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                  <div className="flex items-center gap-3 cursor-pointer hover:bg-accent p-2 rounded-lg">
+                      <Avatar className='h-9 w-9'>
+                          <AvatarImage src={user.avatar} alt={user.name ?? 'Avatar'} />
+                          <AvatarFallback>{user.name?.charAt(0).toUpperCase() ?? 'U'}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 overflow-hidden">
+                          <p className="text-sm font-medium text-foreground truncate">{user.name ?? 'Carregando...'}</p>
+                          <p className="text-xs text-muted-foreground truncate">{user.email ?? ''}</p>
+                      </div>
+                  </div>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56 mb-2" side="top" align="start">
+                  <DropdownMenuLabel>Minha Conta</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <Link href="/admin/profile" passHref>
+                      <DropdownMenuItem>
+                          <User className="mr-2 h-4 w-4" />
+                          <span>Editar Perfil Pessoal</span>
+                      </DropdownMenuItem>
+                  </Link>
+                  <DropdownMenuItem onClick={handleLogout}>
+                      <LogOut className="mr-2 h-4 w-4" />
+                      <span>Sair</span>
+                  </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-        </header>
-        <main className="flex-1 p-4 md:p-6 lg:p-8 bg-muted/30">
-            {children}
+        </div>
+      </div>
+      <div className="flex flex-col">
+         <header className="flex h-14 items-center gap-4 border-b bg-muted/40 px-4 lg:h-[60px] lg:px-6">
+           <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="outline" size="icon" className="shrink-0 md:hidden">
+                 <Menu className="h-5 w-5" />
+                 <span className="sr-only">Toggle navigation menu</span>
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="flex flex-col">
+               <nav className="grid gap-2 text-lg font-medium">
+                 {/* CORREÇÃO: Link e ícone do logo no mobile padronizados e apontando para "/" */}
+                 <Link href="/" className="flex items-center gap-2 text-lg font-semibold mb-4">
+                   <Logo />
+                   <span className="">OmniFlow AI</span>
+                 </Link>
+                 <SidebarNav navItems={adminNavItems} />
+               </nav>
+            </SheetContent>
+           </Sheet>
+           <div className="w-full flex-1"></div>
+           <CopyChatLinkButton />
+           <NotificationBell />
+         </header>
+        <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6">
+          {children}
         </main>
-      </SidebarInset>
-    </SidebarProvider>
-  );
+      </div>
+    </div>
+  )
 }

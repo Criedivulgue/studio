@@ -9,45 +9,67 @@ import {
 } from "@/components/ui/popover";
 import { Badge } from '@/components/ui/badge';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/use-auth'; // Hook para obter o usuário logado
+import { db } from '@/lib/firebase'; // Instância do Firestore
+import {
+  collection, query, where, onSnapshot, doc, writeBatch 
+} from 'firebase/firestore';
 
+// A interface da notificação agora corresponde ao documento do Firestore
 interface Notification {
-  id: string;
+  id: string; // ID do documento do Firestore
   title: string;
   body: string;
   url: string;
+  isRead: boolean;
 }
 
 export function NotificationBell() {
   const router = useRouter();
+  const { user } = useAuth(); // Obtém o usuário logado
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
-    const handleNewMessage = (event: CustomEvent) => {
-      const { notification, webpush } = event.detail;
-      const newNotification: Notification = {
-        id: event.detail.messageId || new Date().toISOString(),
-        title: notification.title,
-        body: notification.body,
-        url: webpush.fcm_options.link,
-      };
+    if (!user) return; // Se não houver usuário, não faz nada
 
-      setNotifications(prev => [newNotification, ...prev.slice(0, 4)]); // Mantém as últimas 5
-      setUnreadCount(prev => prev + 1);
-    };
+    // Query para buscar notificações não lidas para o usuário logado
+    const q = query(
+      collection(db, 'notifications'),
+      where('adminId', '==', user.id), // CORREÇÃO: user.uid -> user.id
+      where('isRead', '==', false)
+    );
 
-    window.addEventListener('new-fcm-message', handleNewMessage as EventListener);
-    return () => window.removeEventListener('new-fcm-message', handleNewMessage as EventListener);
-  }, []);
+    // Listener em tempo real
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const newNotifications: Notification[] = snapshot.docs.map(d => ({
+        id: d.id,
+        ...(d.data() as Omit<Notification, 'id'>),
+      }));
+      
+      setNotifications(newNotifications);
+      setUnreadCount(newNotifications.length);
+    });
 
-  const handleOpenChange = (isOpen: boolean) => {
-    if (isOpen) {
-      setUnreadCount(0); // Marca como lido ao abrir o popover
+    // Limpa o listener ao desmontar o componente
+    return () => unsubscribe();
+  }, [user]); // Reexecuta se o usuário mudar
+
+  // Marca as notificações como lidas quando o popover é aberto
+  const handleOpenChange = async (isOpen: boolean) => {
+    if (isOpen && notifications.length > 0) {
+      const batch = writeBatch(db);
+      notifications.forEach(notif => {
+        const notifRef = doc(db, 'notifications', notif.id);
+        batch.update(notifRef, { isRead: true });
+      });
+      await batch.commit();
+      // O listener onSnapshot irá automaticamente limpar a lista
     }
   };
 
   const handleNotificationClick = (notification: Notification) => {
-    router.push(notification.url); // Redireciona para o chat
+    router.push(notification.url);
   };
 
   return (
@@ -67,11 +89,12 @@ export function NotificationBell() {
           <div className="space-y-2">
             <h4 className="font-medium leading-none">Notificações</h4>
             <p className="text-sm text-muted-foreground">
-              Você tem {unreadCount} novas mensagens.
+              {unreadCount > 0 ? `Você tem ${unreadCount} novas notificações.` : 'Nenhuma nova notificação.'}
             </p>
           </div>
           <div className="grid gap-2">
             {notifications.length > 0 ? (
+              // Mostra as notificações não lidas mais recentes primeiro
               notifications.map((item) => (
                 <button
                   key={item.id}
@@ -88,7 +111,7 @@ export function NotificationBell() {
                 </button>
               ))
             ) : (
-              <p className="text-sm text-muted-foreground text-center py-4">Nenhuma nova notificação.</p>
+              <p className="text-sm text-muted-foreground text-center py-4">Tudo em dia!</p>
             )}
           </div>
         </div>

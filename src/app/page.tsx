@@ -1,12 +1,62 @@
 'use client';
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
+// Importar 'doc' e 'getDoc' para a nova lógica
+import { doc, getDoc } from "firebase/firestore"; 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { ArrowRight, Bot, Zap } from "lucide-react";
 import { Logo } from "@/components/logo";
+import { useAuth } from "@/hooks/use-auth";
+import { db } from "@/lib/firebase";
 
 export default function Home() {
+  const { user, loading: authLoading } = useAuth();
+  const [superAdminLink, setSuperAdminLink] = useState('#');
+  const [linkLoading, setLinkLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchSuperAdminId = async () => {
+      setLinkLoading(true);
+      try {
+        // 1. O caminho para o nosso novo documento de configuração pública
+        const configDocRef = doc(db, "public_config", "global");
+        
+        // 2. Buscar o documento diretamente
+        const docSnap = await getDoc(configDocRef);
+
+        if (docSnap.exists()) {
+          // 3. Obter o ID do superadmin do campo específico no documento
+          const superAdminId = docSnap.data().superAdminId;
+          if (superAdminId) {
+            setSuperAdminLink(`/?adminId=${superAdminId}`);
+          } else {
+            console.error("Documento 'public_config/global' não contém o campo 'superAdminId'.");
+            setSuperAdminLink('#');
+          }
+        } else {
+          console.error("Documento de configuração 'public_config/global' não encontrado. Crie-o no Firestore.");
+          setSuperAdminLink('#');
+        }
+      } catch (error) {
+        console.error("Erro ao buscar a configuração pública:", error);
+        setSuperAdminLink('#');
+      } finally {
+        setLinkLoading(false);
+      }
+    };
+
+    fetchSuperAdminId();
+  }, []);
+
+  const getDashboardLink = () => {
+    if (!user) return "/login";
+    return user.role === 'superadmin' ? '/super-admin/dashboard' : '/admin/dashboard';
+  };
+
+  const isChatDisabled = authLoading || linkLoading || !!user || superAdminLink === '#';
+
   return (
     <div className="flex flex-col min-h-screen">
       <header className="container mx-auto px-4 md:px-6 h-16 flex items-center">
@@ -26,14 +76,20 @@ export default function Home() {
                 Clique no botão abaixo para iniciar uma conversa com nosso assistente de IA e ser conectado a um especialista.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                 <Button asChild size="lg" className="font-bold">
-                  <Link href="/chat/YxV6l12x9wR7Kca2fV9S2345678">
-                    Iniciar Atendimento <Bot className="ml-2" />
-                  </Link>
-                </Button>
+                {isChatDisabled ? (
+                  <Button size="lg" className="font-bold" disabled>
+                    {authLoading || linkLoading ? "Carregando..." : "Iniciar Atendimento"} <Bot className="ml-2" />
+                  </Button>
+                ) : (
+                  <Button asChild size="lg" className="font-bold">
+                    <Link href={superAdminLink}>
+                      Iniciar Atendimento <Bot className="ml-2" />
+                    </Link>
+                  </Button>
+                )}
                 <Button asChild size="lg" variant="outline">
-                  <Link href="/login">
-                    Acessar Painel <ArrowRight className="ml-2" />
+                  <Link href={getDashboardLink()}>
+                    {user ? "Ir para o Painel" : "Acessar Painel"} <ArrowRight className="ml-2" />
                   </Link>
                 </Button>
               </div>

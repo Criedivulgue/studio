@@ -1,41 +1,43 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collectionGroup, onSnapshot, query, getDocs, collection } from 'firebase/firestore';
+import { collection, onSnapshot, query, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
-import { DataTable } from '@/components/data-table';
+import { createDataTable } from '@/components/data-table';
 import { Loader2 } from 'lucide-react';
-import { History, columns } from './_components/columns'; // Adapte as colunas conforme necessário
+// CORREÇÃO: Importando o tipo correto (ConversationHistory) de columns.tsx
+import { ConversationHistory, columns } from './_components/columns';
+
+// CORREÇÃO: Criando o componente da tabela da forma correta
+const HistoryDataTable = createDataTable<ConversationHistory, any>();
 
 export default function SuperAdminHistoryPage() {
-  const [history, setHistory] = useState<History[]>([]);
+  // CORREÇÃO: Usando o tipo correto no estado
+  const [history, setHistory] = useState<ConversationHistory[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // A consulta agora busca da coleção 'conversations', que é o nosso histórico de chat.
     const q = query(collection(db, 'conversations'));
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
-      // Cache para evitar buscar o mesmo usuário (admin) múltiplas vezes
       const usersCache = new Map<string, string>();
       const adminsSnapshot = await getDocs(collection(db, 'users'));
       adminsSnapshot.forEach(doc => {
         usersCache.set(doc.id, doc.data().name || `Admin ${doc.id.substring(0, 4)}`);
       });
 
-      const historyData: History[] = snapshot.docs.map(doc => {
+      // CORREÇÃO: Mapeando os dados para o tipo ConversationHistory
+      const historyData: ConversationHistory[] = snapshot.docs.map(doc => {
         const data = doc.data();
         return {
           id: doc.id,
           contactName: data.contactName || 'Nome não encontrado',
           adminName: usersCache.get(data.adminId) || 'Admin desconhecido',
           lastMessage: data.lastMessage || 'Nenhuma mensagem',
-          status: data.status || 'active',
-          adminId: data.adminId,
-          contactId: data.contactId,
-          createdAt: data.createdAt?.toDate() || new Date(), // Converte Timestamp para Date
+          // Mapeando para o campo esperado pelo arquivo de colunas
+          lastMessageTimestamp: data.lastMessageTimestamp?.toDate() || data.updatedAt?.toDate() || data.createdAt?.toDate() || new Date(),
         };
       });
 
@@ -50,7 +52,7 @@ export default function SuperAdminHistoryPage() {
   }, []);
 
   return (
-    <div className="space-y-4">
+    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <Heading 
         title={`Histórico de Chats (${loading ? '...' : history.length})`}
         description="Visualize todas as conversas iniciadas na plataforma."
@@ -61,7 +63,8 @@ export default function SuperAdminHistoryPage() {
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <DataTable
+        // CORREÇÃO: Usando o componente de tabela criado corretamente
+        <HistoryDataTable
           columns={columns}
           data={history}
           searchKey="contactName"

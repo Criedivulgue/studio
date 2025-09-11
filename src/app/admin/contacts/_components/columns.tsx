@@ -1,47 +1,67 @@
 'use client';
 
-import { ColumnDef } from '@tanstack/react-table';
-import { Badge } from '@/components/ui/badge';
-import { CellAction } from './cell-action'; 
-import { Contact } from '@/lib/types'; // Importa o tipo canônico
+import { ColumnDef } from "@tanstack/react-table";
+import { CellAction } from "./cell-action";
+import { Badge } from "@/components/ui/badge";
 
-// CORREÇÃO: A interface agora é um "pick" do tipo Contact canônico, garantindo 100% de compatibilidade.
-// Isso remove a necessidade de manter uma interface local separada e evita erros de tipo.
-export type ContactColumn = Pick<Contact, 'id' | 'name' | 'email' | 'whatsapp' | 'status'>;
+// A definição do tipo permanece a mesma
+export type ContactColumn = {
+  id: string;
+  name: string;
+  phone: string;
+  groups: string;      
+  interests: string;  
+  rawData: { 
+    id: string;
+    name: string;
+    phone: string;
+    groupIds?: string[];
+    interestIds?: string[];
+  };
+};
 
 export const columns: ColumnDef<ContactColumn>[] = [
   {
-    accessorKey: 'name',
-    header: 'Nome',
-    cell: ({ row }) => <div className="font-medium">{row.original.name}</div>,
+    accessorKey: "name",
+    header: "Nome",
   },
   {
-    accessorKey: 'email',
-    header: 'E-mail',
+    accessorKey: "phone",
+    header: "WhatsApp",
   },
   {
-    accessorKey: 'whatsapp',
-    header: 'WhatsApp',
-    cell: ({ row }) => row.original.whatsapp || 'N/A', // Exibe N/A se o whatsapp não existir
-  },
-  {
-    accessorKey: 'status',
-    header: 'Status',
+    accessorKey: "groups",
+    header: "Grupos",
     cell: ({ row }) => {
-      const status = row.original.status;
-      let variant: "default" | "outline" | "secondary" = 'secondary';
-      if (status === 'active') variant = 'default';
-      if (status === 'inactive') variant = 'outline';
-
+      const groups = row.original.groups;
+      if (!groups) return <div className="text-center">-</div>;
       return (
-        <Badge variant={variant}>
-          {status.charAt(0).toUpperCase() + status.slice(1)} 
-        </Badge>
+        <div className="flex flex-wrap gap-1">
+          {groups.split(', ').map(group => (
+            <Badge key={group} variant="secondary">{group}</Badge>
+          ))}
+        </div>
       );
     },
   },
   {
-    id: 'actions',
+    accessorKey: "interests",
+    header: "Interesses",
+    cell: ({ row }) => {
+      const interests = row.original.interests;
+      if (!interests) return <div className="text-center">-</div>;
+      return (
+        <div className="flex flex-wrap gap-1">
+          {interests.split(', ').map(interest => (
+            <Badge key={interest} variant="outline">{interest}</Badge>
+          ))}
+        </div>
+      );
+    },
+  },
+  {
+    id: "actions",
+    // CORREÇÃO FINAL: Passando o objeto original completo, que corresponde ao tipo ContactColumn
     cell: ({ row }) => <CellAction data={row.original} />,
   },
 ];

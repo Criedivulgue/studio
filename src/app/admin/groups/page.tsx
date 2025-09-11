@@ -1,73 +1,123 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { useAuth } from '@/hooks/use-auth';
+import { useToast } from '@/hooks/use-toast';
+import type { PlatformUser } from '@/lib/types';
 
 import { Button } from "@/components/ui/button";
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Loader2 } from 'lucide-react';
-import { DataTable } from '@/components/data-table';
-import { columns, GroupColumn } from './_components/columns'; // Colunas para Grupos
+import { Plus } from 'lucide-react';
+import { createDataTable } from '@/components/data-table';
+
+import { GroupColumn, columns } from './_components/columns';
+import { GroupModal } from './_components/group-modal';
+
+const GroupsDataTable = createDataTable<GroupColumn, any>();
 
 export default function AdminGroupsPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const { toast } = useToast();
   const [groups, setGroups] = useState<GroupColumn[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  useEffect(() => {
-    if (!user) {
-      setLoading(false);
-      return;
-    }
+  const fetchData = async (currentUser: PlatformUser) => {
+    setLoading(true);
+    try {
+      const tagsCollection = collection(db, "tags");
+      const contactsCollection = collection(db, "contacts");
 
-    const q = query(collection(db, `users/${user.uid}/groups`));
+      const groupsBaseQuery = [where("type", "==", "group")];
+      if (currentUser.role !== 'superadmin') {
+        groupsBaseQuery.push(where("ownerId", "==", currentUser.id));
+      }
+      const groupsQuery = query(tagsCollection, ...groupsBaseQuery);
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const groupsData: GroupColumn[] = snapshot.docs.map(doc => ({
+      const contactsQuery = currentUser.role === 'superadmin'
+        ? query(contactsCollection)
+        : query(contactsCollection, where("ownerId", "==", currentUser.id));
+
+      const [groupsSnapshot, contactsSnapshot] = await Promise.all([
+        getDocs(groupsQuery),
+        getDocs(contactsQuery),
+      ]);
+
+      const groupContactCounts = new Map<string, number>();
+      contactsSnapshot.forEach(contactDoc => {
+        const contactData = contactDoc.data();
+        if (contactData.groupIds && Array.isArray(contactData.groupIds)) {
+          contactData.groupIds.forEach(groupId => {
+            groupContactCounts.set(groupId, (groupContactCounts.get(groupId) || 0) + 1);
+          });
+        }
+      });
+
+      const groupsData: GroupColumn[] = groupsSnapshot.docs.map(doc => ({
         id: doc.id,
         name: doc.data().name,
-        memberCount: doc.data().members?.length || 0,
+        contactCount: groupContactCounts.get(doc.id) || 0,
       }));
-      setGroups(groupsData);
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching groups: ", error);
-      setLoading(false);
-    });
 
-    return () => unsubscribe();
-  }, [user]);
+      setGroups(groupsData);
+
+    } catch (error) {
+      console.error("Error fetching groups data: ", error);
+      toast({ variant: "destructive", title: "Erro ao carregar os grupos" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (authLoading) {
+      setLoading(true);
+      return;
+    }
+    if(user) {
+      fetchData(user);
+    }
+  }, [user, authLoading]);
+
+  const handleSuccess = () => {
+    setIsModalOpen(false);
+    if (user) {
+      fetchData(user);
+    }
+  };
 
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-      <div className="flex items-center justify-between">
-        <Heading 
-          title={`Grupos (${groups.length})`}
-          description="Gerencie seus grupos de contatos."
-        />
-        <Button onClick={() => { /* TODO: Implementar modal de adição de grupo */ }}>
-          <Plus className="mr-2 h-4 w-4" /> Criar Grupo
-        </Button>
-      </div>
-      <Separator />
-      
-      {loading ? (
-        <div className="flex justify-center items-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+    <>
+      <GroupModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)}
+        onSuccess={handleSuccess}
+        type="group"
+      />
+
+      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+        <div className="flex items-center justify-between">
+          <Heading 
+            title={`Meus Grupos (${loading ? '...' : groups.length})`}
+            description="Crie e gerencie grupos para organizar seus contatos."
+          />
+          <Button onClick={() => setIsModalOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" /> Adicionar Grupo
+          </Button>
         </div>
-      ) : (
-        <DataTable
+        <Separator />
+        
+        <GroupsDataTable
           columns={columns}
           data={groups}
           searchKey="name"
           placeholder="Filtrar por nome do grupo..."
-          emptyMessage="Nenhum grupo encontrado."
+          emptyMessage="Nenhum grupo encontrado. Crie um para começar!"
         />
-      )}
-    </div>
+      </div>
+    </>
   );
 }

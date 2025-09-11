@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { MessageSquare, Users, History, Bot } from 'lucide-react';
+import { MessageSquare, Users, History, Bot, Users2 } from 'lucide-react'; // Adicionado Users2
 
 // Links de navegação definidos de forma clara e correta
 const navLinks = [
@@ -16,6 +16,12 @@ const navLinks = [
     href: "/admin/contacts",
     label: "Contatos",
     icon: <Users className="mr-2 h-4 w-4" />
+  },
+  // --- ADICIONADO LINK DE GRUPOS ---
+  {
+    href: "/admin/groups",
+    label: "Grupos",
+    icon: <Users2 className="mr-2 h-4 w-4" />
   },
   {
     href: "/admin/history",

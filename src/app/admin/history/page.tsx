@@ -1,80 +1,74 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collectionGroup, onSnapshot, query, where, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/hooks/use-auth';
 
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
-import { DataTable } from '@/components/data-table';
-import { Loader2 } from 'lucide-react';
+import { createDataTable } from '@/components/data-table';
 import { HistoryEntry, columns } from './_components/columns';
 
+const HistoryDataTable = createDataTable<HistoryEntry, any>();
+
 export default function HistoryPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user) {
+    if (authLoading) {
+      setLoading(true);
+      return;
+    }
+
+    if (user?.id) {
       const conversationsQuery = query(
-        collectionGroup(db, 'conversations'), 
+        collection(db, 'conversations'),
         where('adminId', '==', user.id),
-        orderBy('lastMessageTimestamp', 'desc')
+        where('status', '==', 'archived'),
+        orderBy('archivedAt', 'desc')
       );
 
       const unsubscribe = onSnapshot(conversationsQuery, (snapshot) => {
-        if (snapshot.empty) {
-          setHistory([]);
-          setLoading(false);
-          return;
-        }
-
         const historyData: HistoryEntry[] = snapshot.docs.map(doc => {
           const data = doc.data();
           return {
             id: doc.id,
             contactName: data.contactName || 'Desconhecido',
-            lastMessage: data.lastMessage || 'Nenhuma mensagem',
-            lastMessageTimestamp: data.lastMessageTimestamp?.toDate().toISOString() || new Date().toISOString(),
+            summary: data.summary || 'Nenhum resumo disponível.',
+            archivedAt: data.archivedAt?.toDate().toISOString() || new Date().toISOString(),
           };
         });
         setHistory(historyData);
         setLoading(false);
       }, (error) => {
-        console.error("Erro ao buscar histórico com collectionGroup: ", error);
-        // ALERTA: Um erro comum aqui é a falta de um índice no Firestore.
-        // O erro no console do navegador geralmente inclui um link para criar o índice necessário.
+        console.error("Erro ao buscar histórico: ", error);
         setLoading(false);
       });
 
       return () => unsubscribe();
     } else {
         setLoading(false);
+        setHistory([]);
     }
-  }, [user]);
+  }, [user, authLoading]);
 
   return (
-    <div className="space-y-4">
+    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <Heading 
-        title={`Histórico de Conversas (${history.length})`}
-        description="Visualize todas as suas conversas passadas."
+        title={`Histórico de Conversas (${loading ? '...' : history.length})`}
+        description="Visualize o arquivo de conversas passadas e seus resumos gerados por IA."
       />
       <Separator />
-      {loading ? (
-        <div className="flex justify-center items-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      ) : (
-        <DataTable
-          columns={columns}
-          data={history}
-          searchKey="contactName"
-          placeholder="Filtrar por contato..."
-          emptyMessage="Nenhum histórico de conversa foi encontrado."
-        />
-      )}
+      <HistoryDataTable
+        columns={columns}
+        data={history}
+        searchKey="contactName"
+        placeholder="Filtrar por contato..." // CORREÇÃO: Renomeado de searchPlaceholder para placeholder
+        emptyMessage="Nenhuma conversa arquivada encontrada."
+      />
     </div>
   );
 }

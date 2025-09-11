@@ -2,67 +2,80 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { db } from '@/lib/firebase'; // Corrigido: Usando o SDK cliente padrão
-import { collection, getDocs, orderBy, query, DocumentData } from 'firebase/firestore'; // Importações necessárias do Firestore
+import { db } from '@/lib/firebase';
+import { collection, getDocs, doc, getDoc, orderBy, query, DocumentData } from 'firebase/firestore';
 
 // Inicialização do Gemini API
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+const model = genAI.getGenerativeModel({ model: "gemini-pro"});
 
 /**
- * Lida com requisições POST para gerar um resumo de uma conversa.
+ * Lida com requisições POST para gerar uma SUGESTÃO DE RESPOSTA para uma conversa em tempo real.
+ * A lógica agora combina as configurações de IA global e pessoal.
  */
 export async function POST(req: NextRequest) {
   try {
-    const { conversationPath } = await req.json();
+    // O request agora precisa enviar o adminId e o caminho da conversa
+    const { conversationPath, adminId } = await req.json();
 
     if (!conversationPath || typeof conversationPath !== 'string') {
       return NextResponse.json({ error: 'O caminho da conversa (conversationPath) é obrigatório.' }, { status: 400 });
     }
+    if (!adminId || typeof adminId !== 'string') {
+        return NextResponse.json({ error: 'O ID do administrador (adminId) é obrigatório.' }, { status: 400 });
+    }
 
-    // 1. Buscar todas as mensagens da conversa no Firestore
+    // 1. Buscar o prompt Global
+    const globalSettingsRef = doc(db, "system_settings", "ai_global");
+    const globalSettingsDoc = await getDoc(globalSettingsRef);
+    const globalPrompt = globalSettingsDoc.exists() ? globalSettingsDoc.data().prompt : "Você é um assistente de atendimento.";
+
+    // 2. Buscar o prompt Pessoal do admin
+    const adminUserRef = doc(db, "users", adminId);
+    const adminUserDoc = await getDoc(adminUserRef);
+    const personalPrompt = adminUserDoc.exists() ? adminUserDoc.data().aiPrompt : "";
+
+    // 3. Buscar o histórico de mensagens
     const messagesRef = collection(db, conversationPath, 'messages');
     const messagesQuery = query(messagesRef, orderBy('timestamp', 'asc'));
     const messagesSnapshot = await getDocs(messagesQuery);
-
-    if (messagesSnapshot.empty) {
-      return NextResponse.json({ error: 'Nenhuma mensagem encontrada para resumir.' }, { status: 404 });
-    }
-
-    // 2. Formatar as mensagens para a IA
-    const conversationHistory = messagesSnapshot.docs.map((doc: DocumentData) => { // Corrigido: Adicionado tipo para 'doc'
-        const data = doc.data();
-        // Assumindo que o ID do admin contém "admin". Ajuste se necessário.
-        const sender = data.senderId.includes('admin') ? 'Atendente' : 'Cliente'; 
+    const conversationHistory = messagesSnapshot.docs.map((d: DocumentData) => {
+        const data = d.data();
+        // O senderId aqui deve ser o ID do usuário ou do admin
+        const sender = data.senderId === adminId ? 'Atendente' : 'Cliente'; 
         return `${sender}: ${data.text}`;
     }).join('\n');
 
-    // 3. Montar o prompt
-    const model = genAI.getGenerativeModel({ model: "gemini-pro"});
-    const prompt = `
-        Você é um assistente de atendimento ao cliente qualificado.
-        Sua tarefa é ler um chat e gerar um resumo conciso e informativo em um único parágrafo.
-        O resumo deve destacar: o motivo do contato, os pontos chave discutidos e a resolução final.
-        **Não inclua saudações ou despedidas.**
+    // 4. Construir o prompt final combinado
+    const finalPrompt = `
+      ${globalPrompt}
 
-        Transcrição do chat:
-        ---
-        ${conversationHistory}
-        ---
+      ${personalPrompt ? `---\nInstruções Adicionais:\n${personalPrompt}` : ''}
+
+      ---
+      Com base nas regras acima, e no histórico do diálogo abaixo, gere uma resposta curta e útil para o Atendente continuar a conversa. Fale diretamente ao Cliente.
+
+      Histórico do Diálogo:
+      ${conversationHistory}
+      ---
+      Sugestão de resposta:
     `;
 
-    // 4. Chamar a IA
-    const result = await model.generateContent(prompt);
+    // 5. Chamar a IA para gerar a sugestão de resposta
+    const result = await model.generateContent(finalPrompt);
     const response = await result.response;
-    const summaryText = response.text();
+    const suggestionText = response.text();
 
-    // 5. Retornar o resumo
-    return NextResponse.json({ summary: summaryText });
+    // 6. Retornar a sugestão
+    // O nome do campo é mantido como 'summary' para evitar quebrar o frontend imediatamente.
+    // O ideal seria renomear para 'suggestion' no frontend também.
+    return NextResponse.json({ summary: suggestionText });
 
   } catch (error) {
-    console.error("Erro na API de resumo: ", error);
+    console.error("Erro na API de sugestão de resposta: ", error);
     if (error instanceof Error) {
         console.error(error.message);
     }
-    return NextResponse.json({ error: 'Ocorreu um erro interno ao gerar o resumo.' }, { status: 500 });
+    return NextResponse.json({ error: 'Ocorreu um erro interno ao gerar a sugestão.' }, { status: 500 });
   }
 }

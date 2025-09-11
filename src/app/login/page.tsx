@@ -10,94 +10,101 @@ import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/logo";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/use-auth"; // Importado
-import { signIn, signUp, checkSuperAdminExists } from "@/services/authService";
+import { useAuth } from "@/hooks/use-auth";
+import { signIn, signUp, getUserProfile } from "@/services/authService";
 import { User } from "@/lib/types";
+
+const handleAuthError = (error: any, toast: any) => {
+  const firebaseError = error.code || 'auth/unknown-error';
+  let message = "Ocorreu um erro. Tente novamente.";
+  switch (firebaseError) {
+    case 'auth/user-not-found':
+    case 'auth/wrong-password':
+    case 'auth/invalid-credential':
+      message = "Email ou senha inválidos.";
+      break;
+    case 'auth/email-already-in-use':
+      message = "Este email já está cadastrado. Tente fazer login.";
+      break;
+    case 'auth/weak-password':
+      message = "Sua senha é muito fraca. Use pelo menos 6 caracteres.";
+      break;
+    case 'auth/invalid-email':
+      message = "O email fornecido não é válido.";
+      break;
+    default:
+      message = error.message || message;
+      console.error("Auth Error:", error);
+      break;
+  }
+  toast({
+    variant: "destructive",
+    title: "Falha na Autenticação",
+    description: message,
+  });
+};
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false); // Renomeado para clareza
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
-  const { user, loading: isAuthLoading } = useAuth(); // Hook de autenticação em uso
+  const { user, loading: isAuthLoading } = useAuth();
 
-  // Efeito para redirecionar usuários já logados
   useEffect(() => {
     if (!isAuthLoading && user) {
-      toast({ title: "Você já está logado!", description: "Redirecionando para o seu painel..." });
-      if (user.role === 'superadmin') {
-        router.push('/super-admin/dashboard');
-      } else {
-        router.push('/admin/dashboard');
-      }
+      const targetUrl = user.role === 'superadmin' ? '/super-admin/dashboard' : '/admin/dashboard';
+      window.location.href = targetUrl;
     }
-  }, [isAuthLoading, user, router, toast]);
+  }, [isAuthLoading, user]);
 
-  const handleAuth = async (action: "login" | "signup") => {
+  const redirectToDashboard = (loggedInUser: User) => {
+    toast({
+      title: `Bem-vindo, ${loggedInUser.name}!`,
+      description: "Você será redirecionado para o seu painel.",
+    });
+    const targetUrl = loggedInUser.role === 'superadmin' ? '/super-admin/dashboard' : '/admin/dashboard';
+    window.location.href = targetUrl;
+  }
+
+  const handleLogin = async () => {
     setIsSubmitting(true);
     try {
-      let loggedInUser: User | null = null;
-      if (action === "login") {
-        loggedInUser = await signIn(email, password);
-      } else {
-        const name = email.split('@')[0];
-        const superAdminExists = await checkSuperAdminExists();
-        const role = superAdminExists ? 'admin' : 'superadmin';
-
-        loggedInUser = await signUp(email, password, name, role);
-        
-        toast({
-          title: `Cadastro realizado com sucesso!`,
-          description: `Sua conta foi criada com a função de ${role}.`,
-        });
-      }
-      
-      if (loggedInUser) {
-        toast({
-          title: `Bem-vindo, ${loggedInUser.name}!`,
-          description: "Você será redirecionado para o seu painel.",
-        });
-
-        if (loggedInUser.role === 'superadmin') {
-          router.push('/super-admin/dashboard');
+      const firebaseUser = await signIn(email, password);
+      if (firebaseUser) {
+        const userProfile = await getUserProfile(firebaseUser.uid);
+        if (userProfile) {
+          redirectToDashboard(userProfile);
         } else {
-          router.push('/admin/dashboard');
+          throw new Error("Perfil de usuário não encontrado.");
         }
       }
-
-    } catch (error: any) {
-      const firebaseError = error.code || 'auth/unknown-error';
-      let message = "Ocorreu um erro. Tente novamente.";
-      switch (firebaseError) {
-        case 'auth/user-not-found':
-        case 'auth/wrong-password':
-          message = "Email ou senha inválidos.";
-          break;
-        case 'auth/email-already-in-use':
-          message = "Este email já está cadastrado. Tente fazer login.";
-          break;
-        case 'auth/weak-password':
-          message = "Sua senha é muito fraca. Use pelo menos 6 caracteres.";
-          break;
-        case 'auth/invalid-email':
-            message = "O email fornecido não é válido.";
-            break;
-        default:
-          console.error("Firebase Auth Error:", error);
-          break;
-      }
-      toast({
-        variant: "destructive",
-        title: "Falha na Autenticação",
-        description: message,
-      });
-    } finally {
-      setIsSubmitting(false);
+    } catch (error) {
+      handleAuthError(error, toast);
+      setIsSubmitting(false); // Manter o formulário ativo em caso de erro
     }
   };
 
-  // Mostra um loader em tela cheia enquanto verifica a sessão ou se o usuário já está logado e sendo redirecionado
+  const handleSignUp = async () => {
+    setIsSubmitting(true);
+    try {
+      const name = email.split('@')[0] || 'Novo Usuário';
+      const newUser = await signUp(email, password, name);
+      
+      toast({
+        title: `Cadastro realizado com sucesso!`,
+        description: `Sua conta foi criada com a função de ${newUser.role}.`,
+      });
+
+      redirectToDashboard(newUser);
+      
+    } catch (error) {
+      handleAuthError(error, toast);
+      setIsSubmitting(false); // Manter o formulário ativo em caso de erro
+    }
+  };
+
   if (isAuthLoading || user) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
@@ -106,59 +113,41 @@ export default function LoginPage() {
     );
   }
 
-  // Só mostra o formulário se a autenticação terminou e não há usuário
   return (
     <div className="flex items-center justify-center min-h-screen bg-background">
       <Card className="mx-auto max-w-sm w-full">
         <CardHeader className="text-center">
-            <div className="flex justify-center mb-4">
-              <Link href="/">
-                <Logo />
-              </Link>
-            </div>
+          <div className="flex justify-center mb-4">
+            <Link href="/">
+              <Logo />
+            </Link>
+          </div>
           <CardTitle className="text-2xl font-headline">Acesse sua Conta</CardTitle>
           <CardDescription>
-            Entre com suas credenciais ou cadastre-se para criar a conta de Super Admin.
+            Entre com suas credenciais para acessar seu painel.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4">
             <div className="grid gap-2">
               <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="nome@exemplo.com"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={isSubmitting}
-              />
+              <Input id="email" type="email" placeholder="nome@exemplo.com" required value={email} onChange={(e) => setEmail(e.target.value)} disabled={isSubmitting}/>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="password">Senha</Label>
-              <Input 
-                id="password" 
-                type="password" 
-                required 
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={isSubmitting}
-              />
+              <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} disabled={isSubmitting}/>
             </div>
             <div className="flex gap-2">
-                <Button onClick={() => handleAuth('login')} className="w-full" disabled={isSubmitting || !email || !password}>
-                    {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                    Login
-                </Button>
-                <Button onClick={() => handleAuth('signup')} variant="secondary" className="w-full" disabled={isSubmitting || !email || !password}>
-                     {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} 
-                    Cadastrar
-                </Button>
+              <Button onClick={handleLogin} className="w-full" disabled={isSubmitting || !email || !password}>
+                {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Login
+              </Button>
+              <Button onClick={handleSignUp} variant="secondary" className="w-full" disabled={isSubmitting || !email || !password}>
+                {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Cadastrar
+              </Button>
             </div>
           </div>
-           <div className="mt-4 text-center text-xs">
-             <p className="text-muted-foreground">O primeiro usuário cadastrado será o Super Admin.</p>
+          <div className="mt-4 text-center text-xs">
+            <p className="text-muted-foreground">O primeiro usuário cadastrado será o Super Admin.</p>
           </div>
         </CardContent>
       </Card>

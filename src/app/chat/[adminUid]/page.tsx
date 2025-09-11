@@ -1,14 +1,18 @@
 'use client';
 
-import { useParams } from 'next/navigation';
-import { PublicChatView } from '@/components/chat/PublicChatView';
+import { PublicChatView } from "@/components/chat/PublicChatView";
+import React from 'react'; // Importar React
 
-// A página agora é um container simples
-export default function ChatPage() {
-  // 1. Pega o ID do admin da URL, como antes
-  const { adminUid: adminUidParam } = useParams();
-  const adminUid = Array.isArray(adminUidParam) ? adminUidParam[0] : adminUidParam;
+// A definição de tipo para os parâmetros pode ser uma Promise agora
+type Props = {
+  params: Promise<{ adminUid: string }>;
+};
 
-  // 2. Renderiza o componente reutilizável, passando o ID para ele
+// --- O COMPONENTE DA PÁGINA ATUALIZADO ---
+export default function ChatPage({ params }: Props) {
+  // Correção: Usando React.use() para desempacotar a Promise de parâmetros
+  // Esta é a nova abordagem recomendada pelo Next.js
+  const { adminUid } = React.use(params);
+
   return <PublicChatView adminUid={adminUid} />;
 }
