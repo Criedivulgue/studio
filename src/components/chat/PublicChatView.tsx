@@ -148,11 +148,14 @@ export function PublicChatView({ adminUid }: PublicChatViewProps) {
       const sessionRef = doc(db, sessionPath);
       const messageRef = doc(collection(db, `${sessionPath}/messages`));
 
+      // Adicionando os IDs à mensagem para regras de segurança eficientes
       batch.set(messageRef, {
         content: content,
         role: 'user',
         senderId: visitorUid, // O ID do visitante anônimo
         timestamp: serverTimestamp(),
+        adminId: adminUid, // Denormalized for security rules
+        visitorUid: visitorUid, // Denormalized for security rules
       });
 
       batch.update(sessionRef, {

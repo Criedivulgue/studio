@@ -3,6 +3,10 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
+    // =====================================================================
+    // FUNÇÕES DE AJUDA (HELPERS)
+    // =====================================================================
+
     function isSuperAdmin() {
       return request.auth != null && 
              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
@@ -20,73 +24,135 @@ service cloud.firestore {
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'superadmin');
     }
 
+    // =====================================================================
+    // REGRAS DE ACESSO POR COLEÇÃO
+    // =====================================================================
+
+    // REGRAS PARA USUÁRIOS: Apenas o próprio usuário pode ler ou modificar seu perfil.
     match /users/{userId} {
       allow read, write: if isAuthenticated() && request.auth.uid == userId;
     }
 
+    // REGRAS PARA CONFIGURAÇÃO PÚBLICA: Todos podem ler, só o Super Admin pode escrever.
     match /public_config/{docId} {
       allow read: if true;
       allow write: if isSuperAdmin();
     }
     
+    // REGRAS PARA PERFIS PÚBLICOS: Todos podem ler, mas só o dono pode escrever.
     match /public_profiles/{userId} {
       allow read: if true;
       allow write: if isAuthenticated() && request.auth.uid == userId;
     }
 
+    // REGRAS PARA TAGS (Grupos e Interesses): Só o dono pode ler, escrever e criar.
     match /tags/{tagId} {
       allow read, write: if isAdmin() && resource.data.ownerId == request.auth.uid;
       allow create: if isAdmin() && request.resource.data.ownerId == request.auth.uid;
     }
     
+    // REGRAS PARA CONTATOS: Só o dono pode ler, escrever e criar.
     match /contacts/{contactId} {
       allow read, write: if isAdmin() && resource.data.ownerId == request.auth.uid;
       allow create: if isAdmin() && request.resource.data.ownerId == request.auth.uid;
     }
     
+    // =====================================================================
+    // REGRAS PARA SESSÕES DE CHAT (VERSÃO CORRIGIDA E COMPATÍVEL)
+    // =====================================================================
+    
     match /chatSessions/{sessionId} {
 
+      function getSessionParts() {
+        return sessionId.split('_');
+      }
+      
+      function getSessionAdminId() {
+        return getSessionParts()[1];
+      }
+      
+      function getSessionVisitorUid() {
+        return getSessionParts()[2];
+      }
+      
+      function isValidSessionStructure() {
+        let parts = getSessionParts();
+        // ✅ CORREÇÃO: "session" em vez de "chat" para compatibilidade com o frontend
+        return parts.size() >= 3 && parts[0] == "session";
+      }
+      
+      function isSessionParticipant() {
+        return isAuthenticated() && 
+               (request.auth.uid == getSessionAdminId() || 
+                request.auth.uid == getSessionVisitorUid());
+      }
+      
       function isSessionAdmin() {
-        return isAdmin() && resource.data.adminId == request.auth.uid;
+        return isAuthenticated() && request.auth.uid == getSessionAdminId();
       }
-
+      
       function isSessionVisitor() {
-        return isAuthenticated() && resource.data.visitorUid == request.auth.uid;
+        return isAuthenticated() && request.auth.uid == getSessionVisitorUid();
       }
 
-      // LEITURA: Permitida para o admin OU o visitante da sessão (usa resource).
-      allow read: if isSessionAdmin() || isSessionVisitor();
+      // ✅ LEITURA: Visitante pode verificar existência pelo ID, participantes podem ler conteúdo
+      allow read: if (isValidSessionStructure() && isSessionVisitor()) ||
+                     (resource != null && isSessionParticipant());
 
-      // CRIAÇÃO: Permitida se o usuário autenticado for o visitante (usa request.resource).
-      allow create: if isAuthenticated() && 
-                       request.resource.data.visitorUid == request.auth.uid &&
-                       request.resource.data.adminId != null;
+      // ✅ CRIAÇÃO: Apenas o visitante da sessão pode criá-la (já autenticado)
+      allow create: if isValidSessionStructure() &&
+                      isSessionVisitor() &&
+                      request.resource.data.adminId == getSessionAdminId() &&
+                      request.resource.data.visitorUid == getSessionVisitorUid();
 
-      // ATUALIZAÇÃO/EXCLUSÃO: Apenas para o admin da sessão.
-      allow update, delete: if isSessionAdmin();
+      // ✅ ATUALIZAÇÃO: Admin pode tudo, visitante só campos de mensagem
+      allow update: if isSessionAdmin() ||
+                      (isSessionVisitor() &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'lastMessageTimestamp', 'unreadCount']));
+
+      // ✅ EXCLUSÃO: Apenas o admin da sessão
+      allow delete: if isSessionAdmin();
+      
+      // =====================================================================
+      // SUBCOLEÇÃO MESSAGES (REGRAS SEGURAS E CONSISTENTES)
+      // =====================================================================
       
       match /messages/{messageId} {
         
-        function isAllowedInSession(){
-           let session = get(/databases/$(database)/documents/chatSessions/$(sessionId));
-           return session.data.adminId == request.auth.uid || session.data.visitorUid == request.auth.uid;
+        function isMessageSenderConsistent() {
+          return request.resource.data.senderId == request.auth.uid;
         }
 
-        allow read, create: if isAuthenticated() && isAllowedInSession();
+        // ✅ LEITURA: Apenas participantes da sessão
+        allow read: if isSessionParticipant();
+
+        // ✅ CRIAÇÃO: Apenas participantes, com dados consistentes
+        allow create: if isSessionParticipant() && 
+                        isMessageSenderConsistent() &&
+                        request.resource.data.adminId == getSessionAdminId() &&
+                        request.resource.data.visitorUid == getSessionVisitorUid();
         
-        allow update, delete: if isAdmin() && get(/databases/$(database)/documents/chatSessions/$(sessionId)).data.adminId == request.auth.uid;
+        // ✅ ATUALIZAÇÃO/EXCLUSÃO: Apenas o admin
+        allow update, delete: if isSessionAdmin();
       }
     }
     
+    // =====================================================================
+    // REGRAS PARA OUTRAS COLEÇÕES (MANTIDAS)
+    // =====================================================================
+    
+    // REGRAS PARA CONFIGURAÇÕES DE IA: Só o dono pode ler e escrever.
     match /ai_configs/{configId} {
       allow read, write: if isAdmin() && resource.data.adminId == request.auth.uid;
     }
     
+    // REGRAS PARA CONFIGURAÇÕES DO SISTEMA: Admins podem ler, mas só o Super Admin pode escrever.
     match /system_settings/{documentId} {
       allow read: if isAdmin();
       allow write: if isSuperAdmin();
     }
     
+    // REGRAS PARA NOTIFICAÇÕES: Só o dono pode ler e escrever.
     match /notifications/{notificationId} {
       allow read, write: if isAdmin() && resource.data.adminId == request.auth.uid;
     }
