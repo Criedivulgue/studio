@@ -18,7 +18,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Separator } from '@/components/ui/separator';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import type { Conversation, PlatformUser, Message, ChatSession } from '@/lib/types';
-// FINAL CORRECTION: Using the absolute path alias to ensure the module is found.
 import { LeadIdentificationModal } from '@/components/chat/LeadIdentificationModal';
 
 export type ActiveChat = (Conversation & { type: 'CONVERSATION' }) | (ChatSession & { type: 'SESSION' });
@@ -163,12 +162,17 @@ export function Chat({ user }: { user: PlatformUser }) {
 
   const handleArchiveConversation = async () => {
     if (!selectedChat || selectedChat.type !== 'CONVERSATION') return;
-     setIsProcessing(true);
+    setIsProcessing(true);
     try {
-      await archiveAndSummarizeConversation({ conversationId: selectedChat.id });
+      await archiveAndSummarizeConversation({ 
+        conversationId: selectedChat.id, 
+        contactId: selectedChat.contactId 
+      });
+      toast({ title: 'Success', description: 'Conversation has been archived and summarized.' });
       setSelectedChat(null);
     } catch (error) {
       console.error(`Error during archive:`, error);
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to archive conversation.' })
     } finally {
       setIsProcessing(false);
     }

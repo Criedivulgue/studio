@@ -30,12 +30,12 @@ const generativeModel = vertexAi.preview.getGenerativeModel({
  * 2. Atualiza o status da conversa para 'archived'.
  * 3. Salva o resumo no histórico permanente do contato.
  */
-exports.archiveAndSummarizeConversation = functions.https.onCall(async (data, context) => {
+// FIX: Adicionada a região para consistência com o resto da aplicação.
+exports.archiveAndSummarizeConversation = functions.region("southamerica-east1").https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "O usuário não está autenticado.");
   }
 
-  // A função agora espera também o contactId
   const {conversationId, contactId} = data;
   if (!conversationId || !contactId) {
     throw new functions.https.HttpsError("invalid-argument", "Os IDs da conversa e do contato são obrigatórios.");
@@ -66,13 +66,23 @@ exports.archiveAndSummarizeConversation = functions.https.onCall(async (data, co
 
     // 3. Buscar mensagens e formatar diálogo
     const messagesRef = conversationRef.collection("messages");
-    const messagesSnapshot = await messagesRef.orderBy("createdAt", "asc").get();
+    // FIX: Ordenando por 'timestamp', que é o nome correto do campo.
+    const messagesSnapshot = await messagesRef.orderBy("timestamp", "asc").get();
+
+    // CORREÇÃO CRÍTICA: Usa msg.role para identificar o remetente, que é o campo correto usado no sistema.
+    const getRoleLabel = (role) => {
+      if (role === 'user') return 'Cliente';
+      if (role === 'admin') return 'Atendente';
+      if (role === 'assistant') return 'Assistente IA';
+      return 'Sistema';
+    };
+
     const dialog = messagesSnapshot.docs.map((doc) => {
       const msg = doc.data();
-      return `${msg.sender === "user" ? "Cliente" : "Atendente"}: ${msg.content}`;
+      // FIX: Usando o helper getRoleLabel com o campo correto `msg.role`
+      return `${getRoleLabel(msg.role)}: ${msg.content}`;
     }).join("\n");
 
-    // Se não houver diálogo, crie um resumo padrão e pule a chamada da IA
     let generatedSummary = "A conversa foi arquivada sem mensagens para resumir.";
 
     if (dialog) {
@@ -86,12 +96,19 @@ exports.archiveAndSummarizeConversation = functions.https.onCall(async (data, co
         `;
       const req = {contents: [{role: "user", parts: [{text: finalPrompt}]}]};
       const resp = await generativeModel.generateContent(req);
-      generatedSummary = resp.response.candidates[0].content.parts[0].text;
+      
+      // Adicionada checagem de segurança para a estrutura da resposta da IA.
+      if (resp.response && resp.response.candidates && resp.response.candidates.length > 0 && resp.response.candidates[0].content && resp.response.candidates[0].content.parts && resp.response.candidates[0].content.parts.length > 0) {
+          generatedSummary = resp.response.candidates[0].content.parts[0].text;
+      } else {
+          console.warn("Não foi possível gerar um resumo da IA, usando o padrão. Resposta foi:", JSON.stringify(resp));
+          generatedSummary = "Não foi possível gerar um resumo da IA para esta conversa.";
+      }
     }
 
     console.log(`Resumo gerado: ${generatedSummary}`);
 
-    // 5. ATUALIZAÇÃO: Salvar o resumo no histórico do contato
+    // 5. Salvar o resumo no histórico do contato
     const historyRef = db.collection("contacts").doc(contactId).collection("history").doc(conversationId);
     await historyRef.set({
       summary: generatedSummary,

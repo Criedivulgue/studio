@@ -3,10 +3,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // =====================================================================
-    // FUNÇÕES DE AJUDA (HELPERS)
-    // =====================================================================
-
     function isSuperAdmin() {
       return request.auth != null && 
              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
@@ -20,97 +16,71 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() && 
              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-             (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || 
-              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'superadmin');
+             (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || isSuperAdmin());
     }
 
-    // =====================================================================
-    // REGRAS DE ACESSO POR COLEÇÃO
-    // =====================================================================
-
-    // REGRAS PARA USUÁRIOS: Apenas o próprio usuário pode ler ou modificar seu perfil.
+    // REGRAS PARA USUÁRIOS
     match /users/{userId} {
-      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+      allow get, write: if request.auth != null && request.auth.uid == userId;
+      allow read, list: if isSuperAdmin();
     }
 
-    // REGRAS PARA CONFIGURAÇÃO PÚBLICA: Todos podem ler, só o Super Admin pode escrever.
+    // REGRAS PARA CONTATOS
+    match /contacts/{contactId} {
+      allow read, write: if isAdmin();
+      allow list: if isSuperAdmin();
+    }
+
+    // REGRAS PARA TAGS
+    match /tags/{tagId} {
+      allow read, write: if isAdmin();
+      allow list: if isSuperAdmin();
+    }
+
+    // REGRAS PARA CONFIGURAÇÕES
+    match /ai_configs/{configId} {
+      allow read, write: if isAdmin();
+      allow list: if isSuperAdmin();
+    }
+
+    // REGRAS PÚBLICAS
     match /public_config/{docId} {
       allow read: if true;
       allow write: if isSuperAdmin();
     }
     
-    // REGRAS PARA PERFIS PÚBLICOS: Todos podem ler, mas só o dono pode escrever.
     match /public_profiles/{userId} {
       allow read: if true;
-      allow write: if isAuthenticated() && request.auth.uid == userId;
+      allow write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // REGRAS PARA TAGS (Grupos e Interesses): Só o dono pode ler, escrever e criar.
-    match /tags/{tagId} {
-      allow read, write: if isAdmin() && resource.data.ownerId == request.auth.uid;
-      allow create: if isAdmin() && request.resource.data.ownerId == request.auth.uid;
-    }
-    
-    // REGRAS PARA CONTATOS: Só o dono pode ler, escrever e criar.
-    match /contacts/{contactId} {
-      allow read, write: if isAdmin() && resource.data.ownerId == request.auth.uid;
-      allow create: if isAdmin() && request.resource.data.ownerId == request.auth.uid;
-    }
-    
-    // =====================================================================
-    // REGRAS PARA SESSÕES DE CHAT (IMPLEMENTAÇÃO DEFINITIVA)
-    // =====================================================================
-    
+    // REGRAS PARA CHAT
     match /chatSessions/{sessionId} {
-      // ✅ CASO 1: Visitante cria sua própria sessão
-      allow create: if request.auth != null && 
-                      request.auth.uid == request.resource.data.visitorUid;
+      allow create: if request.auth != null;
+      allow read, update, delete: if isAdmin();
+      allow list: if isAdmin(); // <-- CORREÇÃO 1
       
-      // ✅ CASO 3: Visitante lê sua própria sessão OU Admin lê qualquer sessão
-      allow read: if (request.auth != null && 
-                     resource != null && 
-                     request.auth.uid == resource.data.visitorUid) || 
-                     isAdmin();
-
-      // ✅ Admin pode atualizar qualquer sessão (para status, etc.)
-      allow update: if isAdmin();
-
-      // ✅ Apenas admin pode deletar sessões
-      allow delete: if isAdmin();
-
       match /messages/{messageId} {
-        // ✅ CASO 2: Visitante cria mensagem em sua própria sessão
-        allow create: if request.auth != null && 
-                        request.auth.uid == get(/databases/$(database)/documents/chatSessions/$(sessionId)).data.visitorUid;
-
-        // ✅ CASO 4: Visitante OU Admin podem ler mensagens
-        allow read: if (request.auth != null && 
-                       request.auth.uid == get(/databases/$(database)/documents/chatSessions/$(sessionId)).data.visitorUid) || 
-                       isAdmin();
-
-        // ✅ Apenas admin pode atualizar ou deletar mensagens
-        allow update, delete: if isAdmin();
+        allow create: if request.auth != null;
+        allow read, update, delete: if isAdmin();
+        allow list: if isAdmin();
       }
     }
-    
-    // =====================================================================
-    // REGRAS PARA OUTRAS COLEÇÕES (MANTIDAS)
-    // =====================================================================
-    
-    // REGRAS PARA CONFIGURAÇÕES DE IA: Só o dono pode ler e escrever.
-    match /ai_configs/{configId} {
-      allow read, write: if isAdmin() && resource.data.adminId == request.auth.uid;
+
+    // Assume a similar structure for conversations if it exists
+    match /conversations/{conversationId} {
+        allow read, write, create, list: if isAdmin(); // <-- CORREÇÃO 2
     }
-    
-    // REGRAS PARA CONFIGURAÇÕES DO SISTEMA: Admins podem ler, mas só o Super Admin pode escrever.
+
+    // REGRAS PARA SISTEMA
     match /system_settings/{documentId} {
       allow read: if isAdmin();
       allow write: if isSuperAdmin();
     }
     
-    // REGRAS PARA NOTIFICAÇÕES: Só o dono pode ler e escrever.
     match /notifications/{notificationId} {
-      allow read, write: if isAdmin() && resource.data.adminId == request.auth.uid;
+      allow read, write: if isAdmin();
+      allow list: if isSuperAdmin();
     }
   }
 }

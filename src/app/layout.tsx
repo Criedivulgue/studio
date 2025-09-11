@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
-import { AuthProvider } from '@/hooks/use-auth'; // Importando o AuthProvider
+import { AuthProvider } from '@/hooks/use-auth';
+import ErrorBoundary from '@/components/ErrorBoundary'; // Importando o ErrorBoundary
 
 export const metadata: Metadata = {
   title: 'WhatsAi',
@@ -21,9 +22,11 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
       </head>
       <body className="font-body antialiased">
-        <AuthProvider> {/* Envolvendo a aplicação com o provedor */}
-          {children}
-        </AuthProvider>
+        <ErrorBoundary> {/* Envolvendo tudo com o ErrorBoundary */}
+          <AuthProvider> 
+            {children}
+          </AuthProvider>
+        </ErrorBoundary>
         <Toaster />
       </body>
     </html>

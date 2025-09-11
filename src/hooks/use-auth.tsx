@@ -1,22 +1,22 @@
 'use client';
 
 import {
-  useState, useEffect, createContext, useContext,
-  ReactNode, useMemo
+  useState, useEffect, createContext, useContext, ReactNode, useMemo, useCallback
 } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { onAuthChange, logout } from '@/services/authService';
-import type { User as AuthUser } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { db, rtdb } from '@/lib/firebase';
-import type { PlatformUser } from '@/lib/types';
+import { onAuthStateChanged } from 'firebase/auth';
+import { doc, onSnapshot, getDoc } from 'firebase/firestore';
 import { ref, onValue, set, onDisconnect, serverTimestamp } from "firebase/database";
+import { auth, db, rtdb } from '@/lib/firebase';
+import { logout } from '@/services/authService';
+import { useToast } from "@/hooks/use-toast";
+import type { PlatformUser } from '@/lib/types';
 
 interface AuthContextType {
   user: PlatformUser | null;
   loading: boolean;
   isSuperAdmin: boolean;
-  signOut: () => Promise<void>;
+  signOut: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -30,112 +30,108 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
+  const { toast } = useToast();
 
   useEffect(() => {
-    const unsubscribe = onAuthChange(async (authUser: AuthUser | null) => {
-      if (authUser) {
-        const userDocRef = doc(db, "users", authUser.uid);
-        const userDoc = await getDoc(userDocRef);
-
-        if (userDoc.exists()) {
-          const firestoreData = userDoc.data();
-          setUser({ 
-            id: authUser.uid,
-            email: authUser.email ?? '',
-            name: firestoreData.name,
-            role: firestoreData.role,
-            status: firestoreData.status,
-            whatsapp: firestoreData.whatsapp,
-            createdAt: firestoreData.createdAt,
-          });
-        } else {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        const userDocRef = doc(db, "users", firebaseUser.uid);
+        const unsubscribeSnapshot = onSnapshot(userDocRef, (userDoc) => {
+          if (userDoc.exists()) {
+            const firestoreData = userDoc.data();
+            setUser({
+              id: firebaseUser.uid,
+              email: firebaseUser.email ?? '',
+              name: firestoreData.name,
+              role: firestoreData.role,
+              status: firestoreData.status,
+              whatsapp: firestoreData.whatsapp,
+              createdAt: firestoreData.createdAt,
+            });
+          } else {
+            setUser(null);
+            logout(); 
+          }
+          setLoading(false);
+        }, (error) => {
+          console.error("Auth Hook: Erro ao buscar dados do usuário.", error);
           setUser(null);
-        }
+          setLoading(false);
+        });
+        return () => unsubscribeSnapshot();
       } else {
         setUser(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
     return () => unsubscribe();
   }, []);
 
-  // Efeito para redirecionar admins/superadmins sem perfil público
-  useEffect(() => {
-    if (loading || !user) {
-      return;
-    }
-
-    const isUserAdmin = user.role === 'admin' || user.role === 'superadmin';
-    if (!isUserAdmin) {
-      return;
-    }
-
-    const profilePagePath = user.role === 'superadmin' ? '/super-admin/profile' : '/admin/profile';
-    
-    if (pathname === profilePagePath) {
-      return;
-    }
-
-    const checkAndRedirect = async () => {
-      const publicProfileRef = doc(db, "public_profiles", user.id);
-      const publicProfileDoc = await getDoc(publicProfileRef);
-
-      if (!publicProfileDoc.exists()) {
-        router.push(profilePagePath);
-      }
-    };
-
-    checkAndRedirect();
-  }, [user, loading, pathname, router]);
-
   useEffect(() => {
     if (!user) return;
-
     const userStatusDatabaseRef = ref(rtdb, '/status/' + user.id);
     const connectedRef = ref(rtdb, '.info/connected');
-
     const listener = onValue(connectedRef, (snap) => {
-      if (snap.val() === true) {
-        set(userStatusDatabaseRef, {
-          isOnline: true,
-          last_changed: serverTimestamp(),
-        });
-        onDisconnect(userStatusDatabaseRef).set({
-          isOnline: false,
-          last_changed: serverTimestamp(),
-        });
-      }
+      if (snap.val() !== true) return;
+      set(userStatusDatabaseRef, { isOnline: true, last_changed: serverTimestamp() });
+      onDisconnect(userStatusDatabaseRef).set({ isOnline: false, last_changed: serverTimestamp() });
     });
-
     return () => {
-      listener();
-      onDisconnect(userStatusDatabaseRef).cancel();
-      set(userStatusDatabaseRef, {
-        isOnline: false,
-        last_changed: serverTimestamp(),
-      });
+      if (user?.id) {
+        const userStatusOnDisconnectRef = ref(rtdb, '/status/' + user.id);
+        onDisconnect(userStatusOnDisconnectRef).cancel();
+      }
     };
   }, [user]);
 
-  const handleSignOut = async () => {
-    if (user) {
-        const userStatusDatabaseRef = ref(rtdb, '/status/' + user.id);
-        await set(userStatusDatabaseRef, {
-            isOnline: false,
-            last_changed: serverTimestamp(),
-        });
+  const checkAndRedirect = useCallback(async () => {
+    if (loading || !user) return;
+    const isPrivilegedUser = user.role === 'admin' || user.role === 'superadmin';
+    if (!isPrivilegedUser || pathname.startsWith('/login') || pathname.startsWith('/register')) return;
+
+    const profilePath = user.role === 'superadmin' ? '/super-admin/profile' : '/admin/profile';
+    if (pathname === profilePath) return;
+
+    try {
+      const publicProfileRef = doc(db, "public_profiles", user.id);
+      const publicProfileDoc = await getDoc(publicProfileRef);
+      if (!publicProfileDoc.exists()) {
+        toast({ title: "Perfil Incompleto", description: "Complete seu perfil público para continuar." });
+        router.push(profilePath);
+      }
+    } catch (error) {
+      console.error("Erro ao verificar perfil público:", error);
     }
+  }, [user, loading, pathname, router, toast]);
+
+  useEffect(() => {
+    checkAndRedirect();
+  }, [checkAndRedirect]);
+
+  const handleSignOut = useCallback(async () => {
+    // Primeiro, atualiza o status de presença, se o usuário existir
+    if (user?.id) {
+        try {
+            const userStatusDatabaseRef = ref(rtdb, '/status/' + user.id);
+            await set(userStatusDatabaseRef, { isOnline: false, last_changed: serverTimestamp() });
+        } catch (error) {
+            console.error("Falha ao atualizar status de presença no logout:", error);
+        }
+    }
+    
+    // Inicia o logout no Firebase e o redirecionamento
     await logout();
-    setUser(null);
     router.push('/login');
-  };
+    // A linha setUser(null) foi removida. O onAuthStateChanged cuidará disso.
+
+  }, [user, router]);
 
   const value = useMemo(() => ({
     user,
     loading,
     isSuperAdmin: user?.role === 'superadmin',
     signOut: handleSignOut,
-  }), [user, loading]);
+  }), [user, loading, handleSignOut]);
 
   return (
     <AuthContext.Provider value={value}>

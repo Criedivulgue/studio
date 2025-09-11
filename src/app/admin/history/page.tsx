@@ -8,7 +8,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
 import { createDataTable } from '@/components/data-table';
-import { HistoryEntry, columns } from './_components/columns';
+import { type HistoryEntry, columns } from './_components/columns';
 
 const HistoryDataTable = createDataTable<HistoryEntry, any>();
 
@@ -66,7 +66,7 @@ export default function HistoryPage() {
         columns={columns}
         data={history}
         searchKey="contactName"
-        placeholder="Filtrar por contato..." // CORREÇÃO: Renomeado de searchPlaceholder para placeholder
+        placeholder="Filtrar por contato..."
         emptyMessage="Nenhuma conversa arquivada encontrada."
       />
     </div>

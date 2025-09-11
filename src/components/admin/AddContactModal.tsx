@@ -135,7 +135,6 @@ export function AddContactModal({ adminUid, onSuccess, isOpen, onClose, isSuperA
     }
     setIsLoading(true);
 
-    // CORREÇÃO DEFINITIVA: Construindo o payload com os campos corretos (incluindo groupId) e sem o campo status.
     const payload = {
       name,
       email,
@@ -147,7 +146,6 @@ export function AddContactModal({ adminUid, onSuccess, isOpen, onClose, isSuperA
     };
 
     try {
-      // Usando `as any` para contornar a definição de tipo incorreta no serviço.
       await createContact(payload as any);
       toast({ title: "Sucesso!", description: `Contato "${name}" foi adicionado.` });
       onSuccess();
@@ -161,7 +159,7 @@ export function AddContactModal({ adminUid, onSuccess, isOpen, onClose, isSuperA
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) { resetForm(); onClose(); } else { onClose(); } }}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) { resetForm(); onClose(); } }}>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
           <DialogTitle className="font-headline">Adicionar Novo Contato</DialogTitle>

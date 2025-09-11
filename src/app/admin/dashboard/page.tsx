@@ -19,17 +19,19 @@ export default function DashboardPage() {
   const [dataLoading, setDataLoading] = useState(true);
 
   useEffect(() => {
-    // CORREÇÃO: Substituindo todas as ocorrências de user.uid por user.id
     if (!authLoading && user?.id) {
       const fetchData = async () => {
         setDataLoading(true);
         try {
+          // Consulta para Contatos do usuário logado
           const contactsQuery = query(collection(db, 'contacts'), where('ownerId', '==', user.id));
           const contactsSnap = await getDocs(contactsQuery);
           
-          const groupsQuery = query(collection(db, `users/${user.id}/groups`));
+          // Consulta para Grupos/Tags do usuário logado
+          const groupsQuery = query(collection(db, 'tags'), where('ownerId', '==', user.id));
           const groupsSnap = await getDocs(groupsQuery);
 
+          // Consulta para Conversas do usuário logado
           const chatsQuery = query(collection(db, 'conversations'), where('adminId', '==', user.id));
           const chatsSnap = await getDocs(chatsQuery);
 
@@ -88,7 +90,7 @@ export default function DashboardPage() {
           <CardContent>
             <div className="text-2xl font-bold">{dataLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : stats.groups}</div>
             <p className="text-xs text-muted-foreground">
-              Total de grupos criados
+              Total de grupos e interesses
             </p>
           </CardContent>
         </Card>
