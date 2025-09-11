@@ -1,127 +1,183 @@
-const {onDocumentCreated} = require("firebase-functions/v2/firestore");
+
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
-const {GoogleGenerativeAI} = require("@google/generative-ai");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-// Inicializa o Firebase Admin SDK
+// Initialize Firebase Admin and Gemini API
 admin.initializeApp();
-
-// Inicializa o Gemini API
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({model: "gemini-pro"});
-
+const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 const db = admin.firestore();
 
+/**
+ * REFACTORED: Triggered when a new message is sent by a visitor.
+ * This function now uses the Gemini Chat API for more natural conversations
+ * and aligns with the unified `Message` type.
+ */
 exports.onNewVisitorMessage = onDocumentCreated(
   {
     document: "chatSessions/{sessionId}/messages/{messageId}",
     region: "southamerica-east1",
+    secrets: ["GEMINI_API_KEY"],
   },
   async (event) => {
     const snap = event.data;
     if (!snap) {
-      console.log("Nenhum dado associado ao evento.");
+      console.log("No data associated with the event.");
       return;
     }
 
     const newMessage = snap.data();
     const sessionId = event.params.sessionId;
 
-    // ✅ CORREÇÃO CRÍTICA: Verificação mais robusta
-    // A mensagem NÃO deve ser da IA (isAiResponse) e deve ser do visitante
-    if (newMessage.isAiResponse || newMessage.senderId === newMessage.adminId) {
-      console.log("Mensagem da IA, do admin ou duplicada. Nenhuma ação necessária.");
+    // Only trigger for messages from the 'user' (visitor)
+    if (newMessage.role !== 'user') {
+      console.log("Message is not from a visitor. No AI action needed.");
       return;
     }
 
-    console.log(`Nova mensagem do visitante ${newMessage.senderId} na sessão ${sessionId}. Iniciando processo de resposta da IA.`);
+    console.log(`New visitor message in session ${sessionId}. Initiating AI response.`);
 
     try {
-      // 1. BUSCAR CONFIGURAÇÕES
-      const [globalSettingsDoc, adminUserDoc] = await Promise.all([
-        db.doc("system_settings/ai_global").get(),
-        db.doc(`users/${newMessage.adminId}`).get(),
-      ]);
+      const adminUserDoc = await db.doc(`users/${newMessage.adminId}`).get();
+      const personalPrompt = adminUserDoc.exists() && adminUserDoc.data().aiPrompt
+        ? adminUserDoc.data().aiPrompt
+        : "You are a helpful customer service assistant.";
 
-      const globalPrompt = globalSettingsDoc.exists() && globalSettingsDoc.data().prompt ?
-        globalSettingsDoc.data().prompt :
-        "Você é um assistente de atendimento virtual prestativo.";
-
-      const personalPrompt = adminUserDoc.exists() && adminUserDoc.data().aiPrompt ?
-        adminUserDoc.data().aiPrompt :
-        "";
-
-      // 2. BUSCAR HISTÓRICO (limite maior para contexto melhor)
       const messagesRef = db.collection(`chatSessions/${sessionId}/messages`);
-      const messagesSnapshot = await messagesRef
-        .orderBy("timestamp", "asc")
-        .limit(15) // Aumentado para 15 mensagens
-        .get();
+      const messagesSnapshot = await messagesRef.orderBy("timestamp", "asc").limit(20).get();
 
-      const conversationHistory = messagesSnapshot.docs.map((doc) => {
+      // Format history for Gemini Chat API
+      const history = messagesSnapshot.docs.map(doc => {
         const data = doc.data();
-        const sender = data.senderId === newMessage.adminId ? "Atendente" : "Cliente";
-        return `${sender}: ${data.text}`;
-      }).join("\n");
+        const role = data.role === 'user' ? 'user' : 'model'; // Visitor is 'user', AI/Admin is 'model'
+        return {
+            role: role,
+            parts: [{ text: data.content }],
+        };
+      });
+      
+      // The last message is the new prompt, so remove it from history
+      history.pop();
 
-      // 3. CONSTRUIR PROMPT
-      const finalPrompt = `
-${globalPrompt}
-
-${personalPrompt ? `---\nInstruções Adicionais:\n${personalPrompt}` : ""}
-
----
-Baseado nas regras acima e no histórico abaixo, gere uma resposta curta, amigável e útil para o Cliente. Fale diretamente com o Cliente.
-
-Histórico do Diálogo:
-${conversationHistory}
----
-Resposta:`.trim();
-
-      // 4. GERAR RESPOSTA DA IA
-      console.log("Gerando resposta com a IA...");
-      const result = await model.generateContent(finalPrompt);
+      const chat = model.startChat({ history });
+      const result = await chat.sendMessage(newMessage.content);
       const response = await result.response;
       const aiResponseText = response.text().trim();
-
-      // 5. SALVAR RESPOSTA DA IA
+      
+      // Create AI response message according to the unified `Message` type
       const aiMessage = {
-        text: aiResponseText,
+        content: aiResponseText,
+        role: 'assistant', // AI's role is 'assistant'
+        senderId: 'ai_assistant', // Special ID for the AI
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        senderId: newMessage.adminId,
-        adminId: newMessage.adminId,
-        visitorUid: newMessage.visitorUid,
-        isAiResponse: true,
+        read: false,
       };
 
-      // ✅ Usar batch para operação atômica
+      // Save the AI's response and update the session's last message
       const batch = db.batch();
-      const newMessageRef = db.collection(`chatSessions/${sessionId}/messages`).doc();
-      batch.set(newMessageRef, aiMessage);
-
-      // 6. ATUALIZAR SESSÃO
-      const sessionRef = db.doc(`chatSessions/${sessionId}`);
-      batch.update(sessionRef, {
-        lastMessage: aiResponseText,
-        lastMessageTimestamp: admin.firestore.FieldValue.serverTimestamp(),
-        unreadCount: admin.firestore.FieldValue.increment(1), // ✅ Importante para notificar admin
+      const newMsgRef = messagesRef.doc();
+      batch.set(newMsgRef, aiMessage);
+      batch.update(db.doc(`chatSessions/${sessionId}`), {
+          lastMessage: aiResponseText,
+          lastMessageTimestamp: admin.firestore.FieldValue.serverTimestamp(),
       });
-
       await batch.commit();
-      console.log("Resposta da IA salva e sessão atualizada com sucesso.");
+      
+      console.log("AI response saved successfully.");
+
     } catch (error) {
-      console.error(`Erro ao processar mensagem na sessão ${sessionId}:`, error);
-
-      // Mensagem de erro opcional
-      const errorMessage = {
-        text: "Desculpe, nosso assistente virtual não está disponível no momento. Um humano atenderá em breve.",
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        senderId: newMessage.adminId,
-        adminId: newMessage.adminId,
-        visitorUid: newMessage.visitorUid,
-        isError: true,
-      };
-
-      await db.collection(`chatSessions/${sessionId}/messages`).add(errorMessage);
+      console.error(`Error processing message in session ${sessionId}:`, error);
     }
-  },
+  }
 );
+
+/**
+ * FINAL: This function converts an anonymous ChatSession into a permanent, identified Conversation.
+ * It creates a new Contact, a new Conversation, migrates all messages, and deletes the old session.
+ */
+exports.identifyLead = onCall({ region: "southamerica-east1" }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
+  }
+
+  const { sessionId, adminId, contactData } = request.data;
+  const callingAdminId = request.auth.uid;
+  
+  if (callingAdminId !== adminId) {
+      throw new HttpsError('permission-denied', 'You are not authorized to perform this action.');
+  }
+
+  if (!sessionId || !contactData || !contactData.name || !contactData.email) {
+    throw new HttpsError('invalid-argument', 'Missing required data: sessionId and contactData (name, email).');
+  }
+
+  const sessionRef = db.doc(`chatSessions/${sessionId}`);
+  const newContactRef = db.collection('contacts').doc();
+  const newConversationRef = db.collection('conversations').doc();
+
+  try {
+    // Step 1: Run a transaction to create the core Contact and Conversation atomically.
+    await db.runTransaction(async (transaction) => {
+        const sessionDoc = await transaction.get(sessionRef);
+        if (!sessionDoc.exists) {
+            throw new HttpsError('not-found', `Session with ID ${sessionId} not found.`);
+        }
+        const sessionData = sessionDoc.data();
+
+        // Create the new Contact
+        transaction.set(newContactRef, {
+          id: newContactRef.id,
+          ownerId: adminId,
+          name: contactData.name,
+          email: contactData.email,
+          status: 'active',
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          lastInteraction: sessionData.lastMessageTimestamp || admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        // Create the new Conversation, denormalizing the contact name
+        transaction.set(newConversationRef, {
+          id: newConversationRef.id,
+          adminId: adminId,
+          contactId: newContactRef.id,
+          status: 'active',
+          createdAt: sessionData.createdAt,
+          lastMessage: sessionData.lastMessage || '',
+          lastMessageTimestamp: sessionData.lastMessageTimestamp,
+          unreadCount: 0, 
+          contactName: contactData.name,
+          contactAvatar: contactData.avatar || '',
+        });
+    });
+
+    console.log(`Transaction successful. Contact ${newContactRef.id} and Conversation ${newConversationRef.id} created.`);
+
+    // Step 2: Use a batch write to migrate messages and delete the old session.
+    const messagesRef = sessionRef.collection('messages');
+    const messagesSnapshot = await messagesRef.get();
+    const writeBatch = db.batch();
+
+    if (!messagesSnapshot.empty) {
+        console.log(`Migrating ${messagesSnapshot.size} messages...`);
+        messagesSnapshot.docs.forEach(msgDoc => {
+            const newMsgRef = newConversationRef.collection('messages').doc(msgDoc.id);
+            writeBatch.set(newMsgRef, msgDoc.data());
+            writeBatch.delete(msgDoc.ref);
+        });
+    }
+
+    // Delete the original session document
+    writeBatch.delete(sessionRef);
+    await writeBatch.commit();
+
+    console.log(`Successfully migrated chat and deleted session ${sessionId}.`);
+    return { status: 'success', conversationId: newConversationRef.id };
+
+  } catch (error) {
+    console.error(`Error in identifyLead for session ${sessionId}:`, error);
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError('internal', 'An error occurred while migrating the chat.');
+  }
+});

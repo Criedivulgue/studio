@@ -1,4 +1,3 @@
-
 rules_version = '2';
 
 service cloud.firestore {
@@ -59,82 +58,38 @@ service cloud.firestore {
     }
     
     // =====================================================================
-    // REGRAS PARA SESSÕES DE CHAT (VERSÃO FINAL CORRIGIDA)
+    // REGRAS PARA SESSÕES DE CHAT (IMPLEMENTAÇÃO DEFINITIVA)
     // =====================================================================
     
     match /chatSessions/{sessionId} {
+      // ✅ CASO 1: Visitante cria sua própria sessão
+      allow create: if request.auth != null && 
+                      request.auth.uid == request.resource.data.visitorUid;
+      
+      // ✅ CASO 3: Visitante lê sua própria sessão OU Admin lê qualquer sessão
+      allow read: if (request.auth != null && 
+                     resource != null && 
+                     request.auth.uid == resource.data.visitorUid) || 
+                     isAdmin();
 
-      function getSessionParts() {
-        return sessionId.split('_');
-      }
-      
-      function getSessionAdminId() {
-        return getSessionParts()[1];
-      }
-      
-      function getSessionVisitorUid() {
-        return getSessionParts()[2];
-      }
-      
-      function isValidSessionStructure() {
-        let parts = getSessionParts();
-        return parts.size() >= 3 && parts[0] == "session";
-      }
-      
-      function isSessionParticipant() {
-        return isAuthenticated() && 
-               (request.auth.uid == getSessionAdminId() || 
-                request.auth.uid == getSessionVisitorUid());
-      }
-      
-      function isSessionAdmin() {
-        return isAuthenticated() && request.auth.uid == getSessionAdminId();
-      }
-      
-      function isSessionVisitor() {
-        return isAuthenticated() && request.auth.uid == getSessionVisitorUid();
-      }
+      // ✅ Admin pode atualizar qualquer sessão (para status, etc.)
+      allow update: if isAdmin();
 
-      // ✅✅✅ CORREÇÃO CRÍTICA: Admin pode listar TODAS as sessões para o dashboard
-      allow read: if isAdmin() || // ← NOVA CONDIÇÃO: Qualquer admin pode ler qualquer sessão
-                     (isValidSessionStructure() && isSessionVisitor()) ||
-                     (resource != null && isSessionParticipant());
+      // ✅ Apenas admin pode deletar sessões
+      allow delete: if isAdmin();
 
-      // ✅ CRIAÇÃO: Apenas o visitante da sessão pode criá-la
-      allow create: if isValidSessionStructure() &&
-                      isSessionVisitor() &&
-                      request.resource.data.adminId == getSessionAdminId() &&
-                      request.resource.data.visitorUid == getSessionVisitorUid();
-
-      // ✅ ATUALIZAÇÃO: Admin pode tudo, visitante só campos de mensagem
-      allow update: if isSessionAdmin() ||
-                      (isSessionVisitor() &&
-                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'lastMessageTimestamp', 'unreadCount']));
-
-      // ✅ EXCLUSÃO: Apenas o admin da sessão
-      allow delete: if isSessionAdmin();
-      
-      // =====================================================================
-      // SUBCOLEÇÃO MESSAGES (REGRAS SEGURAS E CONSISTENTES)
-      // =====================================================================
-      
       match /messages/{messageId} {
-        
-        function isMessageSenderConsistent() {
-          return request.resource.data.senderId == request.auth.uid;
-        }
+        // ✅ CASO 2: Visitante cria mensagem em sua própria sessão
+        allow create: if request.auth != null && 
+                        request.auth.uid == get(/databases/$(database)/documents/chatSessions/$(sessionId)).data.visitorUid;
 
-        // ✅ LEITURA: Apenas participantes da sessão
-        allow read: if isSessionParticipant();
+        // ✅ CASO 4: Visitante OU Admin podem ler mensagens
+        allow read: if (request.auth != null && 
+                       request.auth.uid == get(/databases/$(database)/documents/chatSessions/$(sessionId)).data.visitorUid) || 
+                       isAdmin();
 
-        // ✅ CRIAÇÃO: Apenas participantes, com dados consistentes
-        allow create: if isSessionParticipant() && 
-                        isMessageSenderConsistent() &&
-                        request.resource.data.adminId == getSessionAdminId() &&
-                        request.resource.data.visitorUid == getSessionVisitorUid();
-        
-        // ✅ ATUALIZAÇÃO/EXCLUSÃO: Apenas o admin
-        allow update, delete: if isSessionAdmin();
+        // ✅ Apenas admin pode atualizar ou deletar mensagens
+        allow update, delete: if isAdmin();
       }
     }
     

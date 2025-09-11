@@ -1,92 +1,130 @@
+
 import { Timestamp } from "firebase/firestore";
 
-// ETAPA DE CORREÇÃO: Arquivo de Tipos Central
-// A maioria dos erros de tipo se origina aqui. Corrigir este arquivo primeiro.
+// =================================================================================
+// UNIFIED CORE TYPES - Post-Refactor v2.0
+// This file is the single source of truth for all data models in the application.
+// =================================================================================
 
 export type UserRole = 'superadmin' | 'admin';
 
 /**
- * Representa um usuário autenticado na plataforma.
- * O ID do documento do Firestore é a fonte de verdade.
- * Renomeado para PlatformUser para evitar conflitos de nome.
- * Propriedade 'id' padronizada e campos ausentes adicionados.
+ * Represents an authenticated user in the system (Super Admin or Admin).
+ * The document ID in Firestore is the user's UID from Firebase Auth.
  */
 export interface PlatformUser {
-  id: string; // Padronizado para 'id' em vez de 'uid' para consistência.
+  id: string; // UID from Firebase Auth
   name: string;
   email: string;
   role: UserRole;
   status: 'active' | 'inactive';
-  whatsapp: string;
-  avatar?: string;
   createdAt: Date | Timestamp;
+  // Optional/Profile-related fields
+  whatsapp?: string;
+  avatar?: string;
   fcmToken?: string;
-  aiPrompt?: string; // Propriedade ausente adicionada
-  useCustomInfo?: boolean; // Propriedade para controlar o uso de dados do cliente
-  contactGroups?: string[]; // Propriedade ausente adicionada
+  // AI-specific settings
+  aiPrompt?: string;
+  useCustomInfo?: boolean;
+  contactGroups?: string[];
 }
 
-// A interface User original é mantida para compatibilidade, mas estende a nova.
+// Kept for backward compatibility in some older components, but PlatformUser is preferred.
 export interface User extends PlatformUser {}
 
 /**
- * Modelo para um Contato (Lead).
- * Campo 'avatar' adicionado.
+ * The "Public Badge" for an Admin.
+ * Contains only safe, publicly-displayable information for the chat widget.
  */
-export interface Contact {
-  id: string;
-  ownerId: string;
-  name: string;
-  email: string;
-  phone?: string;
-  whatsapp?: string;
-  status: 'active' | 'inactive' | 'archived';
-  interesses: string[];
-  ownerName?: string;
-  createdAt: Date | Timestamp;
-  lastInteraction?: Date | Timestamp;
-  canal?: string;
-  group?: string;
-  avatar?: string; // Propriedade ausente adicionada
-}
-
-/**
- * Representa uma mensagem dentro de uma conversa no chat.
- */
-export interface Message {
-  id: string;
-  text: string;
-  senderId: string;
-  timestamp: any; // Idealmente, deveria ser Timestamp
-  read: boolean;
-}
-
-
-/**
- * Tipo placeholder para resolver erro de importação.
- */
-export interface ChatSession {
-  id: string;
-  // outras propriedades conforme necessário
-}
-
-/**
- * Tipo placeholder para resolver erro de importação.
- */
-export interface ContactInteraction {
-  id: string;
-  // outras propriedades conforme necessário
-}
-
-
-// --- Outros tipos existentes (sem alterações) ---
-
 export interface PublicProfile {
   displayName: string;
   avatarUrl: string;
   greeting: string;
-  ownerId: string;
+  ownerId: string; // The UID of the admin this profile belongs to
 }
+
+/**
+ * Represents an identified customer contact belonging to an Admin.
+ */
+export interface Contact {
+  id: string;
+  ownerId: string; // UID of the Admin who owns this contact
+  name: string;
+  email: string;
+  status: 'active' | 'inactive' | 'archived';
+  // Optional fields
+  phone?: string;
+  whatsapp?: string;
+  interesses?: string[];
+  ownerName?: string;
+  createdAt?: Date | Timestamp;
+  lastInteraction?: Date | Timestamp;
+  canal?: string;
+  group?: string;
+  avatar?: string;
+}
+
+// =================================================================================
+// UNIFIED CHAT & CONVERSATION TYPES
+// =================================================================================
+
+/**
+ * [UNIFIED] Represents a single message within any chat.
+ * This is the single source of truth for message objects, replacing the old
+ * 'ChatMessage' and 'Message' types.
+ */
+export interface Message {
+  id: string;
+  senderId: string; // UID of the visitor or admin who sent it
+  role: 'user' | 'assistant' | 'admin'; // 'user' for visitor, 'admin' for admin/superadmin
+  content: string; // The text content of the message
+  timestamp: Timestamp;
+  read: boolean;
+}
+
+/**
+ * Represents a temporary, anonymous chat session in the "waiting room".
+ * These are stored in the `chatSessions` collection.
+ */
+export interface ChatSession {
+  id: string;
+  adminId: string;    // The Admin (shop owner) being contacted
+  visitorUid: string; // The anonymous UID of the visitor
+  status: 'open' | 'closed';
+  createdAt: Timestamp;
+  lastMessage?: string;
+  lastMessageTimestamp?: Timestamp;
+  // Optional info captured from the visitor
+  visitorName?: string;
+  visitorEmail?: string;
+}
+
+/**
+ * Represents a permanent, identified conversation stored in the "main archive".
+ * These are stored in the `conversations` collection after a lead is identified.
+ */
+export interface Conversation {
+  id: string;
+  adminId: string;  // The Admin who owns this conversation
+  contactId: string; // The ID of the identified Contact
+  status: 'active' | 'closed' | 'archived';
+  createdAt: Timestamp;
+  lastMessage: string;
+  lastMessageTimestamp: Timestamp;
+  unreadCount: number;
+  
+  // ERROR FIX: Denormalized contact info for efficient display
+  contactName: string;
+  contactAvatar?: string;
+
+  // AI-generated summaries
+  summary?: string;
+  archivedAt?: Timestamp;
+}
+
+// =================================================================================
+// Other types (Forms, Webhooks, etc.) - To be reviewed/refactored later
+// =================================================================================
 
 export interface Form {
   id: string;
@@ -110,51 +148,4 @@ export interface Webhook {
   eventName: string;
   adminId: string;
   createdAt: Date;
-}
-
-export interface AdminSettings {
-  id: string;
-  aiName: string;
-  aiInstruction: string;
-  companyName: string;
-  companyInfo: string;
-}
-
-export interface ChatMessage {
-  role: 'user' | 'assistant' | 'admin';
-  content: string;
-  senderId?: string;
-  timestamp?: any;
-  text?: string;
-}
-
-export interface ChatContact {
-  id: string;
-  name: string;
-  avatar?: string;
-}
-
-export interface ActiveChat {
-  id: string;
-  contact: ChatContact;
-  lastMessage: string;
-  timestamp: string;
-  unreadCount: number;
-  messages: ChatMessage[];
-  adminId: string;
-}
-
-export interface Conversation {
-  id?: string;
-  path?: string;
-  name?: string;
-  lastMessage: string;
-  unreadCount?: number;
-  lastMessageTimestamp?: any;
-  adminId: string;
-  contactId?: string;
-  status: 'anonymous' | 'pending_identification' | 'active' | 'closed' | 'expired' | 'archived'; // Adicionado 'archived'
-  createdAt: any;
-  summary?: string; // Adicionado para histórico
-  archivedAt?: any; // Adicionado para histórico
 }
