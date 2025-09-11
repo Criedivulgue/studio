@@ -1,3 +1,4 @@
+
 rules_version = '2';
 
 service cloud.firestore {
@@ -58,7 +59,7 @@ service cloud.firestore {
     }
     
     // =====================================================================
-    // REGRAS PARA SESSÕES DE CHAT (VERSÃO CORRIGIDA E COMPATÍVEL)
+    // REGRAS PARA SESSÕES DE CHAT (VERSÃO FINAL CORRIGIDA)
     // =====================================================================
     
     match /chatSessions/{sessionId} {
@@ -77,7 +78,6 @@ service cloud.firestore {
       
       function isValidSessionStructure() {
         let parts = getSessionParts();
-        // ✅ CORREÇÃO: "session" em vez de "chat" para compatibilidade com o frontend
         return parts.size() >= 3 && parts[0] == "session";
       }
       
@@ -95,11 +95,12 @@ service cloud.firestore {
         return isAuthenticated() && request.auth.uid == getSessionVisitorUid();
       }
 
-      // ✅ LEITURA: Visitante pode verificar existência pelo ID, participantes podem ler conteúdo
-      allow read: if (isValidSessionStructure() && isSessionVisitor()) ||
+      // ✅✅✅ CORREÇÃO CRÍTICA: Admin pode listar TODAS as sessões para o dashboard
+      allow read: if isAdmin() || // ← NOVA CONDIÇÃO: Qualquer admin pode ler qualquer sessão
+                     (isValidSessionStructure() && isSessionVisitor()) ||
                      (resource != null && isSessionParticipant());
 
-      // ✅ CRIAÇÃO: Apenas o visitante da sessão pode criá-la (já autenticado)
+      // ✅ CRIAÇÃO: Apenas o visitante da sessão pode criá-la
       allow create: if isValidSessionStructure() &&
                       isSessionVisitor() &&
                       request.resource.data.adminId == getSessionAdminId() &&
