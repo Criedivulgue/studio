@@ -70,7 +70,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             {/* CORREÇÃO: Link do logo no desktop aponta para a raiz "/" */}
             <Link href="/" className="flex items-center gap-2 font-semibold">
               <Logo />
-              <span className="">OmniFlow AI</span>
+              <span className="">WhatsAi</span>
             </Link>
           </div>
           <div className="flex-1 overflow-y-auto">
@@ -122,7 +122,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                  {/* CORREÇÃO: Link e ícone do logo no mobile padronizados e apontando para "/" */}
                  <Link href="/" className="flex items-center gap-2 text-lg font-semibold mb-4">
                    <Logo />
-                   <span className="">OmniFlow AI</span>
+                   <span className="">WhatsAi</span>
                  </Link>
                  <SidebarNav navItems={adminNavItems} />
                </nav>

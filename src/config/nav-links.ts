@@ -8,7 +8,9 @@ import {
   Users, 
   BookUser, 
   Users2,
-  Settings
+  Settings,
+  FileText, 
+  Shield
 } from 'lucide-react';
 import type { NavItem } from '@/components/sidebar-nav';
 
@@ -20,6 +22,8 @@ export const adminNavItems: NavItem[] = [
   { href: "/admin/groups", icon: Group, label: "Grupos" },
   { href: "/admin/history", icon: History, label: "Histórico" },
   { href: "/admin/ai-config", icon: Bot, label: "Config IA" },
+  { href: "/legal/terms-of-service", icon: FileText, label: "Termos" },
+  { href: "/legal/privacy-policy", icon: Shield, label: "Privacidade" }
 ];
 
 // Lista de links para o Super Administrador
@@ -80,5 +84,16 @@ export const superAdminNavItems: NavItem[] = [
     href: "/super-admin/ai-settings",
     label: "Configurações da IA",
     icon: Settings
+  },
+  // === SEÇÃO LEGAL ===
+  {
+    href: "/legal/terms-of-service",
+    label: "Termos",
+    icon: FileText
+  },
+  {
+    href: "/legal/privacy-policy",
+    label: "Privacidade",
+    icon: Shield
   }
 ];

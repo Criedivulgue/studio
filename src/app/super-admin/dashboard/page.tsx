@@ -8,15 +8,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Heading } from "@/components/ui/heading";
 import { BookUser, Users, MessageSquareText, Loader2, ShieldCheck } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
+import { ClaimSiteButton } from './_components/claim-site-button'; // 1. IMPORTAR O COMPONENTE
 
 export default function SuperAdminDashboardPage() {
   const { user, isSuperAdmin, loading: authLoading } = useAuth();
   const [stats, setStats] = useState({
-    // Personal Stats
     personalContacts: 0,
     personalGroups: 0,
     personalChats: 0,
-    // Global Stats
     globalAdmins: 0,
     globalContacts: 0,
     globalChats: 0,
@@ -28,24 +27,14 @@ export default function SuperAdminDashboardPage() {
       const fetchAllData = async () => {
         setDataLoading(true);
         try {
-          // --- Personal Stats Queries (Standardized) ---
           const personalContactsQuery = query(collection(db, 'contacts'), where('ownerId', '==', user.id));
           const personalGroupsQuery = query(collection(db, `users/${user.id}/groups`));
           const personalChatsQuery = query(collection(db, 'conversations'), where('adminId', '==', user.id));
-
-          // --- Global Stats Queries ---
           const globalAdminsQuery = query(collection(db, 'users'), where('role', '==', 'admin'));
           const globalContactsQuery = collection(db, 'contacts');
           const globalChatsQuery = collection(db, 'conversations');
 
-          const [
-            personalContactsSnap,
-            personalGroupsSnap,
-            personalChatsSnap,
-            globalAdminsSnap,
-            globalContactsSnap,
-            globalChatsSnap
-          ] = await Promise.all([
+          const [ pContactsSnap, pGroupsSnap, pChatsSnap, gAdminsSnap, gContactsSnap, gChatsSnap ] = await Promise.all([
             getDocs(personalContactsQuery),
             getDocs(personalGroupsQuery),
             getDocs(personalChatsQuery),
@@ -55,12 +44,12 @@ export default function SuperAdminDashboardPage() {
           ]);
 
           setStats({
-            personalContacts: personalContactsSnap.size,
-            personalGroups: personalGroupsSnap.size,
-            personalChats: personalChatsSnap.size,
-            globalAdmins: globalAdminsSnap.size,
-            globalContacts: globalContactsSnap.size,
-            globalChats: globalChatsSnap.size,
+            personalContacts: pContactsSnap.size,
+            personalGroups: pGroupsSnap.size,
+            personalChats: pChatsSnap.size,
+            globalAdmins: gAdminsSnap.size,
+            globalContacts: gContactsSnap.size,
+            globalChats: gChatsSnap.size,
           });
         } catch (error) {
           console.error("Error fetching dashboard data: ", error);
@@ -89,6 +78,13 @@ export default function SuperAdminDashboardPage() {
 
   return (
     <div className="flex-1 space-y-8 p-4 md:p-8 pt-6">
+      {/* 2. ADICIONAR A NOVA SEÇÃO COM O COMPONENTE INTELIGENTE */}
+      <div>
+        <Heading title="Configuração da Plataforma" description="Ações de configuração principal do sistema." />
+        <Separator className="mt-4 mb-6" />
+        <ClaimSiteButton />
+      </div>
+
       {/* Personal Section */}
       <div>
         <Heading title="Minha Atividade Pessoal" description="Sua visão geral como administrador." />

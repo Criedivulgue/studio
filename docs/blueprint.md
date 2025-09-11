@@ -1,4 +1,4 @@
-# **App Name**: OmniFlow AI
+# **App Name**: WhatsAi
 
 ## Core Features:
 

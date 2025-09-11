@@ -81,7 +81,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
             {/* CORREÇÃO: Link e Logo para Desktop */}
             <Link href="/" className="flex items-center gap-2 font-semibold">
               <Logo />
-              <span className="">OmniFlow AI</span>
+              <span className="">WhatsAi</span>
             </Link>
           </div>
           <div className="flex-1 overflow-y-auto">
@@ -133,7 +133,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
                  {/* CORREÇÃO: Link e Logo para Mobile */}
                 <Link href="/" className="flex items-center gap-2 text-lg font-semibold mb-4">
                   <Logo />
-                  <span className="">OmniFlow AI</span>
+                  <span className="">WhatsAi</span>
                 </Link>
                 <SidebarNav navItems={superAdminNavItems} />
               </nav>

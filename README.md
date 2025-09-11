@@ -9,7 +9,7 @@ Estado Atual e Próximos Passos
 Jornada de Desenvolvimento e Plano de Verificação
 
 1. Visão Geral e Metáfora Conceitual <a name="visão-geral"></a>
-A OmniFlow AI é concebida como um Shopping Center Digital, onde:
+A WhatsAi é concebida como um Shopping Center Digital, onde:
 
 Super Administrador = Dono do Shopping
 Administrador = Dono de uma Loja específica
@@ -96,7 +96,7 @@ src/app/
 
 **8.1. Nosso Percurso: Do Conceito à Consolidação**
 
-O desenvolvimento inicial da OmniFlow AI foi uma jornada de descobertas e iterações. Nossa visão sempre foi clara: criar um sistema robusto baseado na metáfora do "Shopping Center". No entanto, o caminho para a implementação técnica correta apresentou desafios cruciais, principalmente em torno da segurança e do fluxo de dados.
+O desenvolvimento inicial da WhatsAi foi uma jornada de descobertas e iterações. Nossa visão sempre foi clara: criar um sistema robusto baseado na metáfora do "Shopping Center". No entanto, o caminho para a implementação técnica correta apresentou desafios cruciais, principalmente em torno da segurança e do fluxo de dados.
 
 *   **O Caminho Enganoso Inicial:** A primeira abordagem para o chat público tentava buscar os dados do administrador (nome, avatar) diretamente de sua coleção privada (`/users`). Embora parecesse lógico do ponto de vista da interface, essa abordagem batia de frente com uma regra fundamental de segurança: dados privados não devem ser acessíveis publicamente. O resultado foram os persistentes erros de "Permissão Negada" do Firebase, que corretamente agia como um segurança, impedindo o acesso não autorizado.
 

@@ -117,12 +117,12 @@ export default function LoginPage() {
     <div className="flex items-center justify-center min-h-screen bg-background">
       <Card className="mx-auto max-w-sm w-full">
         <CardHeader className="text-center">
-          <div className="flex justify-center mb-4">
-            <Link href="/">
+          <div className="flex justify-center items-center mb-4">
+            <Link href="/" className="flex items-center gap-2">
               <Logo />
+              <h1 className="text-2xl font-bold font-headline">WhatsAi</h1>
             </Link>
           </div>
-          <CardTitle className="text-2xl font-headline">Acesse sua Conta</CardTitle>
           <CardDescription>
             Entre com suas credenciais para acessar seu painel.
           </CardDescription>

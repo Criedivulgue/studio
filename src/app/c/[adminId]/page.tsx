@@ -85,7 +85,7 @@ export default function PublicChatPage() {
         </div>
       </div>
        <footer className="mt-8 text-center">
-         <p className="text-sm text-gray-500">Powered by OmniFlow AI</p>
+         <p className="text-sm text-gray-500">Powered by WhatsAi</p>
        </footer>
     </div>
   );

@@ -18,7 +18,7 @@ import { Loader2 } from 'lucide-react';
 import { ImageUploader } from '@/components/ui/image-uploader';
 import type { PublicProfile } from '@/lib/types';
 
-// 1. ATUALIZAR O SCHEMA PARA REFLETIR O PERFIL PÚBLICO
+// 1. ATUALIZAR O SCHEMA PARA TORNAR O AVATAR OBRIGATÓRIO
 const profileFormSchema = z.object({
   displayName: z.string()
     .min(2, { message: 'O nome de exibição deve ter pelo menos 2 caracteres.' })
@@ -26,7 +26,7 @@ const profileFormSchema = z.object({
   greeting: z.string()
     .max(100, { message: 'A saudação não pode ter mais de 100 caracteres.' })
     .optional(),
-  avatarUrl: z.string().url({ message: "URL do avatar inválida." }).optional().or(z.literal('')),
+  avatarUrl: z.string().min(1, { message: "A imagem de perfil é obrigatória." }).url({ message: "URL da imagem de perfil inválida." }),
 });
 
 type ProfileFormValues = z.infer<typeof profileFormSchema>;
@@ -45,9 +45,10 @@ export function ProfileForm() {
       greeting: '',
       avatarUrl: '',
     },
+    // 2. ADICIONAR MODO DE VALIDAÇÃO 'onChange'
+    mode: 'onChange',
   });
 
-  // 2. CORRIGIR A LEITURA DE DADOS PARA USAR O PERFIL PÚBLICO
   useEffect(() => {
     if (user) {
       const fetchProfile = async () => {
@@ -64,7 +65,6 @@ export function ProfileForm() {
               avatarUrl: profileData.avatarUrl || '',
             });
           } else {
-            // Fallback: se o perfil público não existir, leia o nome do perfil privado
             const userDocRef = doc(db, 'users', user.uid);
             const userDocSnap = await getDoc(userDocRef);
             if (userDocSnap.exists()){
@@ -89,7 +89,6 @@ export function ProfileForm() {
     }
   }, [user, form, toast]);
 
-  // 3. ATUALIZAR A LÓGICA DE SALVAMENTO
   const onSubmit = async (data: ProfileFormValues) => {
     if (!user) {
       toast({ title: 'Erro de Autenticação', description: 'Você não está logado.', variant: 'destructive' });
@@ -100,7 +99,7 @@ export function ProfileForm() {
     try {
       const batch = writeBatch(db);
       const publicProfileRef = doc(db, 'public_profiles', user.uid);
-      const userRef = doc(db, 'users', user.uid); // Referência ao perfil privado
+      const userRef = doc(db, 'users', user.uid);
 
       const publicProfileData: Partial<PublicProfile> = {
         displayName: data.displayName,
@@ -108,10 +107,7 @@ export function ProfileForm() {
         greeting: data.greeting || 'Olá! Como posso ajudar hoje?',
       };
 
-      // Atualiza o perfil público com os novos dados
       batch.set(publicProfileRef, publicProfileData, { merge: true });
-
-      // Atualiza o nome no perfil privado para manter consistência
       batch.update(userRef, { name: data.displayName });
 
       await batch.commit();
@@ -172,7 +168,6 @@ export function ProfileForm() {
                   </FormItem>
                 )}
               />
-              {/* 4. ADICIONAR CAMPO DE SAUDAÇÃO */}
               <FormField
                 control={form.control}
                 name="greeting"
@@ -187,7 +182,8 @@ export function ProfileForm() {
                   </FormItem>
                 )}
               />
-              <Button type="submit" disabled={isLoading}>
+              {/* 3. DESABILITAR O BOTÃO SE O FORMULÁRIO FOR INVÁLIDO */}
+              <Button type="submit" disabled={isLoading || !form.formState.isValid}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Salvar Alterações
               </Button>

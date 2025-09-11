@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from '@/hooks/use-auth'; // Importando o AuthProvider
 
 export const metadata: Metadata = {
-  title: 'OmniFlow AI',
+  title: 'WhatsAi',
   description: 'Roteamento Dinâmico de Chat com IA e Transmissão',
 };
 

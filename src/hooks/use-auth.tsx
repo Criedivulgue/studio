@@ -4,7 +4,7 @@ import {
   useState, useEffect, createContext, useContext,
   ReactNode, useMemo
 } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { onAuthChange, logout } from '@/services/authService';
 import type { User as AuthUser } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
@@ -29,6 +29,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<PlatformUser | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     const unsubscribe = onAuthChange(async (authUser: AuthUser | null) => {
@@ -38,15 +39,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         if (userDoc.exists()) {
           const firestoreData = userDoc.data();
-          // CORREÇÃO: Removido 'isOnline' e adicionado campos faltantes para alinhar com o tipo PlatformUser.
           setUser({ 
             id: authUser.uid,
             email: authUser.email ?? '',
             name: firestoreData.name,
             role: firestoreData.role,
-            status: firestoreData.status, // Adicionado
-            whatsapp: firestoreData.whatsapp, // Adicionado
-            createdAt: firestoreData.createdAt, // Adicionado
+            status: firestoreData.status,
+            whatsapp: firestoreData.whatsapp,
+            createdAt: firestoreData.createdAt,
           });
         } else {
           setUser(null);
@@ -58,6 +58,35 @@ export function AuthProvider({ children }: AuthProviderProps) {
     });
     return () => unsubscribe();
   }, []);
+
+  // Efeito para redirecionar admins/superadmins sem perfil público
+  useEffect(() => {
+    if (loading || !user) {
+      return;
+    }
+
+    const isUserAdmin = user.role === 'admin' || user.role === 'superadmin';
+    if (!isUserAdmin) {
+      return;
+    }
+
+    const profilePagePath = user.role === 'superadmin' ? '/super-admin/profile' : '/admin/profile';
+    
+    if (pathname === profilePagePath) {
+      return;
+    }
+
+    const checkAndRedirect = async () => {
+      const publicProfileRef = doc(db, "public_profiles", user.id);
+      const publicProfileDoc = await getDoc(publicProfileRef);
+
+      if (!publicProfileDoc.exists()) {
+        router.push(profilePagePath);
+      }
+    };
+
+    checkAndRedirect();
+  }, [user, loading, pathname, router]);
 
   useEffect(() => {
     if (!user) return;

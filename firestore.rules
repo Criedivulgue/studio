@@ -3,133 +3,92 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Função para verificar se o usuário é superadmin
     function isSuperAdmin() {
       return request.auth != null && 
              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'superadmin';
     }
     
-    // Função para verificar se o usuário está autenticado
     function isAuthenticated() {
       return request.auth != null;
     }
     
-    // Função para verificar se o usuário é admin (incluindo superadmin)
     function isAdmin() {
       return isAuthenticated() && 
              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
              (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || 
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'superadmin');
     }
-    
-    // SUPER ADMIN TEM ACESSO COMPLETO A TUDO
-    function superAdminAccess() {
-      return isSuperAdmin();
-    }
-    
-    // ========== REGRAS PARA USUÁRIOS ==========
+
     match /users/{userId} {
-      allow read, write: if superAdminAccess() || (isAuthenticated() && request.auth.uid == userId);
-      
-      // Subcoleção groups dentro de users
-      match /groups/{groupId} {
-        allow read, write: if superAdminAccess() || (isAuthenticated() && request.auth.uid == userId);
-      }
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
     }
 
-    // ========== REGRAS PARA CONFIGURAÇÃO PÚBLICA ==========
-    // Permite que qualquer pessoa leia a configuração global (para encontrar o superadmin)
-    // mas apenas o superadmin pode alterá-la.
     match /public_config/{docId} {
       allow read: if true;
       allow write: if isSuperAdmin();
     }
     
-    // ========== REGRAS PARA PERFIS PÚBLICOS ==========
     match /public_profiles/{userId} {
-      allow read: if true; // Qualquer pessoa pode ler
-      allow write: if superAdminAccess() || (isAuthenticated() && request.auth.uid == userId);
+      allow read: if true;
+      allow write: if isAuthenticated() && request.auth.uid == userId;
     }
 
-    // ========== REGRAS PARA TAGS (Grupos e Interesses) ==========
-match /tags/{tagId} {
-  allow read, write: if superAdminAccess() || (isAdmin() && request.auth.uid == resource.data.ownerId);
-  allow create: if superAdminAccess() || (isAdmin() && request.resource.data.ownerId == request.auth.uid);
-}
+    match /tags/{tagId} {
+      allow read, write: if isAdmin() && resource.data.ownerId == request.auth.uid;
+      allow create: if isAdmin() && request.resource.data.ownerId == request.auth.uid;
+    }
     
-    // ========== REGRAS PARA CONTATOS ==========
     match /contacts/{contactId} {
-      allow read, write: if superAdminAccess() || 
-        (isAdmin() && request.auth.uid == resource.data.ownerId);
-      
-      allow create: if superAdminAccess() || 
-        (isAdmin() && request.resource.data.ownerId == request.auth.uid);
+      allow read, write: if isAdmin() && resource.data.ownerId == request.auth.uid;
+      allow create: if isAdmin() && request.resource.data.ownerId == request.auth.uid;
     }
     
-    // ========== REGRAS PARA CONVERSAS ==========
-    match /conversations/{conversationId} {
-      allow read, write: if superAdminAccess() || 
-        (isAdmin() && request.auth.uid == resource.data.adminId);
-      
-      allow create: if superAdminAccess() || 
-        (isAdmin() && request.resource.data.adminId == request.auth.uid);
-      
-      // Subcoleção de mensagens
-      match /messages/{messageId} {
-        allow read, write: if superAdminAccess() || 
-          (isAdmin() && request.auth.uid == get(/databases/$(database)/documents/conversations/$(conversationId)).data.adminId);
-      }
-    }
-    
-    // ========== REGRAS PARA SESSÕES DE CHAT ==========
     match /chatSessions/{sessionId} {
-      allow read, write: if superAdminAccess() || 
-        (isAdmin() && request.auth.uid == resource.data.adminId);
+
+      function isSessionAdmin() {
+        return isAdmin() && resource.data.adminId == request.auth.uid;
+      }
+
+      function isSessionVisitor() {
+        return isAuthenticated() && resource.data.visitorUid == request.auth.uid;
+      }
+
+      // LEITURA: Permitida para o admin OU o visitante da sessão (usa resource).
+      allow read: if isSessionAdmin() || isSessionVisitor();
+
+      // CRIAÇÃO: Permitida se o usuário autenticado for o visitante (usa request.resource).
+      allow create: if isAuthenticated() && 
+                       request.resource.data.visitorUid == request.auth.uid &&
+                       request.resource.data.adminId != null;
+
+      // ATUALIZAÇÃO/EXCLUSÃO: Apenas para o admin da sessão.
+      allow update, delete: if isSessionAdmin();
       
-      allow create: if superAdminAccess() || 
-        (isAdmin() && request.resource.data.adminId == request.auth.uid);
-      
-      // Subcoleção de mensagens
       match /messages/{messageId} {
-        allow read, write: if superAdminAccess() || 
-          (isAdmin() && request.auth.uid == get(/databases/$(database)/documents/chatSessions/$(sessionId)).data.adminId);
+        
+        function isAllowedInSession(){
+           let session = get(/databases/$(database)/documents/chatSessions/$(sessionId));
+           return session.data.adminId == request.auth.uid || session.data.visitorUid == request.auth.uid;
+        }
+
+        allow read, create: if isAuthenticated() && isAllowedInSession();
+        
+        allow update, delete: if isAdmin() && get(/databases/$(database)/documents/chatSessions/$(sessionId)).data.adminId == request.auth.uid;
       }
     }
     
-    // ========== REGRAS PARA CONFIGURAÇÕES DE IA ==========
     match /ai_configs/{configId} {
-      allow read, write: if superAdminAccess() || 
-        (isAdmin() && request.auth.uid == resource.data.adminId);
+      allow read, write: if isAdmin() && resource.data.adminId == request.auth.uid;
     }
     
-    // ========== REGRAS PARA HISTÓRICOS ==========
-    match /histories/{historyId} {
-      allow read, write: if superAdminAccess() || 
-        (isAdmin() && request.auth.uid == resource.data.adminId);
-    }
-    
-    // ========== REGRAS PARA CONFIGURAÇÕES DO SISTEMA ==========
     match /system_settings/{documentId} {
-      allow read: if isAdmin(); // Admins podem ler configurações
-      allow write: if superAdminAccess(); // Apenas superadmin pode modificar
+      allow read: if isAdmin();
+      allow write: if isSuperAdmin();
     }
     
-    // ========== REGRAS PARA NOTIFICAÇÕES ==========
     match /notifications/{notificationId} {
-      allow read, write: if superAdminAccess() || 
-        (isAdmin() && request.auth.uid == resource.data.adminId);
-    }
-    
-    // ========== REGRAS PARA GRUPOS (COLEÇÃO RAIZ) ==========
-    match /groups/{groupId} {
-      allow read, write: if isAdmin(); // Todos os admins podem acessar grupos
-    }
-    
-    // ========== REGRA GERAL: SUPER ADMIN TEM ACESSO A TUDO ==========
-    // Esta regra deve vir por último para não interferir com as regras específicas
-    match /{document=**} {
-      allow read, write: if superAdminAccess();
+      allow read, write: if isAdmin() && resource.data.adminId == request.auth.uid;
     }
   }
 }
