@@ -11,10 +11,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
-import { User } from './columns';
+import { PlatformUser } from './columns';
 
 interface CellActionProps {
-  data: User;
+  data: PlatformUser;
 }
 
 export const CellAction: React.FC<CellActionProps> = ({ data }) => {

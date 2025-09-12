@@ -2,7 +2,7 @@
 
 import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, PartialWithFieldValue } from 'firebase/firestore';
-import type { PlatformUser, User } from '@/lib/types';
+import type { PlatformUser } from '@/lib/types';
 
 // As funções getSuperAdmin e getSuperAdminUid foram removidas, pois eram os
 // resquícios da arquitetura antiga que causavam o erro de permissão no Firestore,
@@ -13,9 +13,9 @@ import type { PlatformUser, User } from '@/lib/types';
  * Esta função é segura pois só busca dados quando solicitada, e o controle de permissão
  * para a sua execução é feito pelas Regras do Firestore.
  * @param uid O UID do usuário a ser buscado (Firebase Auth UID).
- * @returns {Promise<User | null>} O objeto completo do usuário ou null se não for encontrado.
+ * @returns {Promise<PlatformUser | null>} O objeto completo do usuário ou null se não for encontrado.
  */
-export async function getUserData(uid: string): Promise<User | null> {
+export async function getUserData(uid: string): Promise<PlatformUser | null> {
     if (!uid) return null;
     try {
         const userDocRef = doc(db, 'users', uid);
@@ -24,7 +24,7 @@ export async function getUserData(uid: string): Promise<User | null> {
             console.warn(`Nenhum usuário encontrado com o UID: ${uid}`);
             return null;
         }
-        return { id: userDoc.id, ...userDoc.data() } as User;
+        return { id: userDoc.id, ...userDoc.data() } as PlatformUser;
     } catch (error) {
         console.error(`Erro ao buscar dados do usuário com UID: ${uid}`, error);
         // Retornar null em caso de erro previne que a aplicação quebre,

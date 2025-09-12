@@ -3,18 +3,13 @@
 import { ColumnDef } from '@tanstack/react-table';
 import { Badge } from '@/components/ui/badge';
 import { CellAction } from './cell-action'; // Componente para o menu de ações
+import type { PlatformUser } from '@/lib/types';
 
-// Define a estrutura de dados para o Usuário
-export type User = {
-  id: string;
-  name: string;
-  email: string;
-  role: 'admin' | 'superadmin';
-  // Adicione outros campos que possam vir do seu documento de usuário
-};
+// Re-exporta PlatformUser para ser usado em page.tsx
+export type { PlatformUser };
 
-// Define as colunas da tabela
-export const columns: ColumnDef<User>[] = [
+// Define as colunas da tabela usando PlatformUser
+export const columns: ColumnDef<PlatformUser>[] = [
   {
     accessorKey: 'name',
     header: 'Nome',

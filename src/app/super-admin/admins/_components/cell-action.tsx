@@ -14,10 +14,10 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { AdminUser } from './columns';
+import type { PlatformUser } from '@/lib/types';
 
 interface CellActionProps {
-  data: AdminUser;
+  data: PlatformUser;
 }
 
 export const CellAction: React.FC<CellActionProps> = ({ data }) => {

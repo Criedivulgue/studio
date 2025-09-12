@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import Link from "next/link";
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  LogOut, Loader2, User, Menu
+  LogOut, Loader2, User as UserIcon, Menu
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -95,7 +95,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   <DropdownMenuSeparator />
                   <Link href="/admin/profile" passHref>
                       <DropdownMenuItem>
-                          <User className="mr-2 h-4 w-4" />
+                          <UserIcon className="mr-2 h-4 w-4" />
                           <span>Editar Perfil Pessoal</span>
                       </DropdownMenuItem>
                   </Link>

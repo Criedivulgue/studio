@@ -3,17 +3,9 @@
 import { ColumnDef } from '@tanstack/react-table';
 import { Badge } from '@/components/ui/badge';
 import { CellAction } from './cell-action'; 
+import type { PlatformUser } from '@/lib/types';
 
-export interface AdminUser {
-  id: string;
-  name: string;
-  email: string;
-  whatsapp: string; // Adicionando a propriedade whatsapp
-  status: 'active' | 'inactive';
-  role: string;
-}
-
-export const columns: ColumnDef<AdminUser>[] = [
+export const columns: ColumnDef<PlatformUser>[] = [
   {
     accessorKey: 'name',
     header: 'Nome',

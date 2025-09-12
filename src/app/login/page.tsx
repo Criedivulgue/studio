@@ -12,7 +12,7 @@ import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { signIn, signUp, getUserProfile } from "@/services/authService";
-import { User } from "@/lib/types";
+import { PlatformUser } from "@/lib/types";
 
 const handleAuthError = (error: any, toast: any) => {
   const firebaseError = error.code || 'auth/unknown-error';
@@ -59,7 +59,7 @@ export default function LoginPage() {
     }
   }, [isAuthLoading, user]);
 
-  const redirectToDashboard = (loggedInUser: User) => {
+  const redirectToDashboard = (loggedInUser: PlatformUser) => {
     toast({
       title: `Bem-vindo, ${loggedInUser.name}!`,
       description: "Você será redirecionado para o seu painel.",

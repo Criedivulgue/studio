@@ -1,28 +1,33 @@
 import { db } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, deleteDoc } from "firebase/firestore";
-import type { Contact } from "@/lib/types";
 
-// Definição do payload para criar um novo contato.
+/**
+ * Define a estrutura de dados para a criação de um novo contato.
+ * Esta é a "carga" que a UI deve enviar para o serviço.
+ */
 export type NewContactPayload = {
   name: string;
-  email: string;
-  whatsapp: string;
-  phone: string;
-  status: 'active' | 'inactive';
-  interesses: string[];
   ownerId: string;
+  whatsapp: string;
+  email?: string | null;
+  phone?: string | null;
+  interesses?: string[];
+  groupId?: string | null;
 };
 
 /**
- * Cria um novo contato no banco de dados.
- * @param contactData - Os dados do novo contato, incluindo o ownerId (o admin).
+ * Cria um novo contato no banco de dados com valores padrão.
+ * @param payload - Os dados do novo contato, validados pelo tipo NewContactPayload.
  * @returns O ID do contato recém-criado.
  */
-export async function createContact(contactData: NewContactPayload): Promise<string> {
+export async function createContact(payload: NewContactPayload): Promise<string> {
   try {
     const contactDocRef = await addDoc(collection(db, "contacts"), {
-      ...contactData,
+      ...payload,
+      // Valores padrão definidos pelo serviço para garantir consistência
+      status: 'active', 
       createdAt: serverTimestamp(),
+      lastInteraction: serverTimestamp(),
     });
     return contactDocRef.id;
   } catch (error) {
@@ -59,7 +64,6 @@ export async function deleteContact(contactId: string): Promise<void> {
     throw new Error('O ID do contato é obrigatório para a exclusão.');
   }
   try {
-    // O caminho correto para os contatos é na coleção 'contacts'
     const contactRef = doc(db, 'contacts', contactId);
     await deleteDoc(contactRef);
   } catch (error) {

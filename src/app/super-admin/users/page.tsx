@@ -9,22 +9,22 @@ import { Separator } from "@/components/ui/separator";
 // CORREÇÃO: Importando a função factory em vez do componente diretamente.
 import { createDataTable } from '@/components/data-table';
 import { Loader2 } from 'lucide-react';
-import { User, columns } from './_components/columns';
+import { PlatformUser, columns } from './_components/columns';
 
-// CORREÇÃO: Criando uma instância da DataTable com o tipo específico User.
-const UserDataTable = createDataTable<User, any>();
+// CORREÇÃO: Criando uma instância da DataTable com o tipo específico PlatformUser.
+const UserDataTable = createDataTable<PlatformUser, any>();
 
 export default function SuperAdminUsersPage() {
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<PlatformUser[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const q = query(collection(db, 'users'));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const usersData: User[] = snapshot.docs.map(doc => ({
+      const usersData: PlatformUser[] = snapshot.docs.map(doc => ({
         id: doc.id,
-        ...(doc.data() as Omit<User, 'id'>),
+        ...(doc.data() as Omit<PlatformUser, 'id'>),
       }));
       setUsers(usersData);
       setLoading(false);

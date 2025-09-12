@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from 'next/navigation';
 import {
   Menu,
-  User,
+  User as UserIcon,
   LogOut,
   Loader2,
 } from "lucide-react";
@@ -106,7 +106,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
                   <DropdownMenuSeparator />
                   <Link href="/super-admin/profile" passHref>
                       <DropdownMenuItem>
-                          <User className="mr-2 h-4 w-4" />
+                          <UserIcon className="mr-2 h-4 w-4" />
                           <span>Editar Perfil</span>
                       </DropdownMenuItem>
                   </Link>

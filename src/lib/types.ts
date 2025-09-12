@@ -29,9 +29,6 @@ export interface PlatformUser {
   contactGroups?: string[];
 }
 
-// Kept for backward compatibility in some older components, but PlatformUser is preferred.
-export interface User extends PlatformUser {}
-
 /**
  * The "Public Badge" for an Admin.
  * Contains only safe, publicly-displayable information for the chat widget.

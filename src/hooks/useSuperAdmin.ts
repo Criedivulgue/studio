@@ -1,18 +1,19 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from './use-auth';
+import type { PlatformUser, Contact } from '@/lib/types'; // Importando os tipos
 
 interface DashboardData {
   totalUsers: number;
   totalContacts: number;
   totalTags: number;
-  recentUsers: any[];
-  recentContacts: any[];
+  recentUsers: PlatformUser[]; // Tipagem forte
+  recentContacts: Contact[];    // Tipagem forte
 }
 
 export const useSuperAdmin = () => {
-  const { user } = useAuth(); // Correctly get the user object which includes the role
+  const { user } = useAuth();
   const [dashboardData, setDashboardData] = useState<DashboardData>({
     totalUsers: 0,
     totalContacts: 0,
@@ -24,7 +25,6 @@ export const useSuperAdmin = () => {
   const [error, setError] = useState<string | null>(null);
 
   const fetchAllData = async () => {
-    // Use user.role for checking permissions
     if (user?.role !== 'superadmin') {
       setError('Acesso negado: requer permissões de superadmin');
       setLoading(false);
@@ -35,44 +35,52 @@ export const useSuperAdmin = () => {
       setLoading(true);
       setError(null);
 
-      // Fetch users
-      const usersQuery = query(collection(db, 'users'));
-      const usersSnapshot = await getDocs(usersQuery);
-      const users = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // Otimizando as queries para pegar totais e recentes de forma eficiente
+      const usersCollection = collection(db, 'users');
+      const contactsCollection = collection(db, 'contacts');
+      const tagsCollection = collection(db, 'tags');
 
-      // Fetch contacts
-      const contactsQuery = query(collection(db, 'contacts'));
-      const contactsSnapshot = await getDocs(contactsQuery);
-      const contacts = contactsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // Queries para totais
+      const usersSnapshot = await getDocs(usersCollection);
+      const contactsSnapshot = await getDocs(contactsCollection);
+      const tagsSnapshot = await getDocs(tagsCollection);
 
-      // Fetch tags
-      const tagsQuery = query(collection(db, 'tags'));
-      const tagsSnapshot = await getDocs(tagsQuery);
-      const tags = tagsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // Queries para recentes (ordenando por 'createdAt' se disponível)
+      const recentUsersQuery = query(usersCollection, orderBy('createdAt', 'desc'), limit(5));
+      const recentContactsQuery = query(contactsCollection, orderBy('createdAt', 'desc'), limit(5));
+
+      const recentUsersSnapshot = await getDocs(recentUsersQuery);
+      const recentContactsSnapshot = await getDocs(recentContactsQuery);
+
+      const recentUsers = recentUsersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as PlatformUser);
+      const recentContacts = recentContactsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Contact);
 
       setDashboardData({
-        totalUsers: users.length,
-        totalContacts: contacts.length,
-        totalTags: tags.length,
-        recentUsers: users.slice(0, 5),
-        recentContacts: contacts.slice(0, 5)
+        totalUsers: usersSnapshot.size,
+        totalContacts: contactsSnapshot.size,
+        totalTags: tagsSnapshot.size,
+        recentUsers,
+        recentContacts,
       });
 
     } catch (err: any) {
       console.error('Error fetching dashboard data:', err);
-      setError(err.message);
+      setError('Falha ao carregar os dados. Verifique a console para detalhes.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (user && user.role === 'superadmin') {
-      fetchAllData();
-    } else if (user) { // If user is not superadmin
-        setError('Acesso negado: requer permissões de superadmin');
-        setLoading(false);
+    if (user) {
+        if (user.role === 'superadmin') {
+            fetchAllData();
+        } else {
+            setError('Acesso negado: requer permissões de superadmin');
+            setLoading(false);
+        }
     }
+    // O hook espera pelo estado `loading` do useAuth ser resolvido
   }, [user]);
 
   return {

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { SendHorizonal, Bot, User, Loader2, X, AlertTriangle } from "lucide-react";
+import { SendHorizonal, Bot, User as UserIcon, Loader2, X, AlertTriangle } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { db, auth } from "@/lib/firebase";
 import { signInAnonymously } from "firebase/auth";
@@ -16,11 +16,12 @@ import type { Message, PublicProfile, ChatSession } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
-interface PublicChatViewProps {
+interface ChatClientProps {
   adminUid: string;
 }
 
-export function PublicChatView({ adminUid }: PublicChatViewProps) {
+// Este é o Componente de Cliente Puro. Ele não sabe nada sobre `params`.
+export default function ChatClient({ adminUid }: ChatClientProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -37,7 +38,7 @@ export function PublicChatView({ adminUid }: PublicChatViewProps) {
 
   useEffect(() => {
     if (!adminUid) {
-      setError("ID do administrador não fornecido. O link pode estar quebrado.");
+      setError("ID do administrador não fornecido.");
       setIsLoading(false);
       return;
     }
@@ -46,7 +47,6 @@ export function PublicChatView({ adminUid }: PublicChatViewProps) {
       setIsLoading(true);
       setError(null);
       try {
-        // Etapa 1: Carregar o perfil do administrador
         const profileDocRef = doc(db, 'public_profiles', adminUid);
         const profileDocSnap = await getDoc(profileDocRef);
         if (profileDocSnap.exists()) {
@@ -56,12 +56,10 @@ export function PublicChatView({ adminUid }: PublicChatViewProps) {
           setAdminProfile({ displayName: 'Assistente', greeting: 'Como posso ajudar?', avatarUrl: '', ownerId: adminUid });
         }
 
-        // Etapa 2: Autenticar o visitante anonimamente
         const userCredential = await signInAnonymously(auth);
         const uid = userCredential.user.uid;
         setVisitorUid(uid);
 
-        // Etapa 3: Inicializar a sessão de chat no Firestore
         const sessionId = `session_${adminUid}_${uid}`;
         const path = `chatSessions/${sessionId}`;
         const sessionRef = doc(db, path);
@@ -80,7 +78,6 @@ export function PublicChatView({ adminUid }: PublicChatViewProps) {
           await setDoc(sessionRef, newSession);
         }
         
-        // Etapa 4: Definir o caminho da sessão para ativar os outros efeitos
         setSessionPath(path);
 
       } catch (err) {
@@ -96,7 +93,6 @@ export function PublicChatView({ adminUid }: PublicChatViewProps) {
 
   }, [adminUid, toast]);
 
-  // Efeito para escutar novas mensagens (permanece o mesmo)
   useEffect(() => {
     if (!sessionPath) return;
     const messagesQuery = query(collection(db, `${sessionPath}/messages`), orderBy("timestamp"));
@@ -110,7 +106,6 @@ export function PublicChatView({ adminUid }: PublicChatViewProps) {
     return () => unsubscribe();
   }, [sessionPath, toast]);
 
-  // Efeito para auto-scroll (permanece o mesmo)
   useEffect(() => {
     if (scrollAreaRef.current) {
       scrollAreaRef.current.scrollTo({ top: scrollAreaRef.current.scrollHeight, behavior: 'smooth' });
@@ -191,7 +186,7 @@ export function PublicChatView({ adminUid }: PublicChatViewProps) {
                 {message.role === 'admin' && adminProfile?.avatarUrl && <AvatarImage src={adminProfile.avatarUrl} alt={adminProfile.displayName} />}
                 <AvatarFallback>
                   {message.role === 'assistant' && <Bot className="h-5 w-5"/>}
-                  {message.role === 'admin' && (adminProfile?.displayName ? adminProfile.displayName[0].toUpperCase() : <User className="h-5 w-5"/>)}
+                  {message.role === 'admin' && (adminProfile?.displayName ? adminProfile.displayName[0].toUpperCase() : <UserIcon className="h-5 w-5"/>)}
                 </AvatarFallback>
               </Avatar>
             )}
@@ -199,7 +194,7 @@ export function PublicChatView({ adminUid }: PublicChatViewProps) {
               {message.role === 'admin' && <p className="text-xs font-bold text-amber-700 pb-1">{adminProfile?.displayName || 'Agente'}</p>}
               {message.content}
             </div>
-            {message.role === "user" && (<Avatar className="h-8 w-8"><AvatarFallback><User/></AvatarFallback></Avatar>)}
+            {message.role === "user" && (<Avatar className="h-8 w-8"><AvatarFallback><UserIcon/></AvatarFallback></Avatar>)}
           </div>
         ))}
         {isAiTyping && (<div className="flex items-start gap-4 justify-start"><Avatar className="h-8 w-8"><AvatarFallback><Bot className="h-5 w-5"/></AvatarFallback></Avatar><div className="max-w-md rounded-xl px-4 py-3 text-sm bg-card"><Loader2 className="h-4 w-4 animate-spin"/></div></div>)}

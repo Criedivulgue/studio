@@ -1,18 +1,10 @@
-'use client';
+import ChatClient from './chat-client';
 
-import { PublicChatView } from "@/components/chat/PublicChatView";
-import React from 'react'; // Importar React
+// Este é o "Posto de Vigilância" (Server Component).
+// Sua única função é extrair os parâmetros e passar para o cliente.
+export default function ChatPage({ params }: { params: { adminUid: string } }) {
+  const { adminUid } = params;
 
-// A definição de tipo para os parâmetros pode ser uma Promise agora
-type Props = {
-  params: Promise<{ adminUid: string }>;
-};
-
-// --- O COMPONENTE DA PÁGINA ATUALIZADO ---
-export default function ChatPage({ params }: Props) {
-  // Correção: Usando React.use() para desempacotar a Promise de parâmetros
-  // Esta é a nova abordagem recomendada pelo Next.js
-  const { adminUid } = React.use(params);
-
-  return <PublicChatView adminUid={adminUid} />;
+  // Renderiza o componente de cliente puro, passando a adminUid como uma prop simples.
+  return <ChatClient adminUid={adminUid} />;
 }

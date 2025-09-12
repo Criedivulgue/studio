@@ -1,9 +1,7 @@
 'use client';
 
-import { Suspense } from 'react';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 import { doc, getDoc } from 'firebase/firestore'; 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -11,40 +9,36 @@ import { ArrowRight, Bot, Zap } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { useAuth } from '@/hooks/use-auth';
 import { db } from '@/lib/firebase';
-import { PublicChatView } from '@/components/chat/PublicChatView';
 
-function MarketingContent() {
+// A página inicial agora é apenas para marketing.
+// O roteador condicional foi removido.
+export default function Home() {
   const { user, loading: authLoading } = useAuth();
   const [superAdminLink, setSuperAdminLink] = useState('#');
   const [linkLoading, setLinkLoading] = useState(true);
 
   useEffect(() => {
     const fetchSuperAdminId = async () => {
-      console.log("Iniciando busca pela configuração pública...");
       setLinkLoading(true);
       try {
         const configDocRef = doc(db, "public_config", "global");
-        console.log("Referência do documento criada para: public_config/global");
         const docSnap = await getDoc(configDocRef);
 
         if (docSnap.exists()) {
-          console.log("Documento 'public_config/global' encontrado.");
-          const data = docSnap.data();
-          console.log("Dados do documento:", data);
-          const superAdminId = data.superAdminId;
+          const superAdminId = docSnap.data().superAdminId;
           if (superAdminId) {
-            console.log("ID do Super Admin encontrada:", superAdminId);
-            setSuperAdminLink(`/?adminId=${superAdminId}`);
+            // O link agora aponta para a nova rota de chat dedicada.
+            setSuperAdminLink(`/chat/${superAdminId}`);
           } else {
-            console.error("ERRO CRÍTICO: O campo 'superAdminId' não existe no documento 'public_config/global'.");
+            console.error("ERRO: O campo 'superAdminId' não foi encontrado no documento de configuração.");
             setSuperAdminLink('#');
           }
         } else {
-          console.error("ERRO CRÍTICO: O documento 'public_config/global' não foi encontrado no Firestore. Verifique se ele foi criado corretamente.");
+          console.error("ERRO: O documento 'public_config/global' não foi encontrado.");
           setSuperAdminLink('#');
         }
       } catch (error) {
-        console.error("ERRO FINAL: Falha ao buscar a configuração pública. Este é o erro de permissão.", error);
+        console.error("ERRO ao buscar a configuração pública:", error);
         setSuperAdminLink('#');
       } finally {
         setLinkLoading(false);
@@ -59,6 +53,7 @@ function MarketingContent() {
     return user.role === 'superadmin' ? '/super-admin/dashboard' : '/admin/dashboard';
   };
 
+  // A lógica para desabilitar o botão de chat permanece a mesma.
   const isChatDisabled = authLoading || linkLoading || !!user || superAdminLink === '#';
 
   return (
@@ -165,24 +160,5 @@ function MarketingContent() {
         </div>
       </footer>
     </div>
-  );
-}
-
-function HomePageRouter() {
-  const searchParams = useSearchParams();
-  const adminId = searchParams.get('adminId');
-
-  if (adminId) {
-    return <PublicChatView adminUid={adminId} />;
-  }
-
-  return <MarketingContent />;
-}
-
-export default function Home() {
-  return (
-    <Suspense fallback={<div className="flex h-screen w-full items-center justify-center">Carregando...</div>}> 
-      <HomePageRouter />
-    </Suspense>
   );
 }

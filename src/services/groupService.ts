@@ -1,6 +1,6 @@
 import { db } from "@/lib/firebase";
 import { doc, updateDoc, getDoc, arrayUnion, arrayRemove } from "firebase/firestore";
-import type { User } from "@/lib/types";
+import type { PlatformUser } from "@/lib/types";
 
 /**
  * Busca os grupos de contatos personalizados de um usuário específico.
@@ -13,7 +13,7 @@ export async function getContactGroups(userId: string): Promise<string[]> {
     const userDoc = await getDoc(userDocRef);
 
     if (userDoc.exists()) {
-      const userData = userDoc.data() as User;
+      const userData = userDoc.data() as PlatformUser;
       // Retorna os grupos do usuário ou um array vazio se não houver.
       return userData.contactGroups || [];
     }
