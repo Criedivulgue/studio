@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { useState, useEffect, useCallback } from 'react';
+import { collection, query, where, getDocs, Firestore } from 'firebase/firestore';
+import { ensureFirebaseInitialized, getFirebaseInstances } from '@/lib/firebase';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import type { PlatformUser } from '@/lib/types';
@@ -10,11 +10,10 @@ import type { PlatformUser } from '@/lib/types';
 import { Button } from "@/components/ui/button";
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
-import { Plus } from 'lucide-react';
+import { Plus, Loader2 } from 'lucide-react';
 import { createDataTable } from '@/components/data-table';
 
-import { InterestColumn, columns } from './_components/columns';
-// Reutilizando o mesmo modal de grupos, que é genérico para tags.
+import { InterestColumn, createColumns } from './_components/columns';
 import { GroupModal } from '../groups/_components/group-modal';
 
 const InterestsDataTable = createDataTable<InterestColumn, any>();
@@ -25,12 +24,28 @@ export default function AdminInterestsPage() {
   const [interests, setInterests] = useState<InterestColumn[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [db, setDb] = useState<Firestore | null>(null);
 
-  const fetchData = async (currentUser: PlatformUser) => {
+  useEffect(() => {
+    const initFirebase = async () => {
+      try {
+        await ensureFirebaseInitialized();
+        const { db: firestoreDb } = getFirebaseInstances();
+        setDb(firestoreDb);
+      } catch (error) {
+        console.error("Firebase init error:", error);
+        toast({ variant: 'destructive', title: 'Erro de Inicialização', description: 'Não foi possível conectar ao banco de dados.' });
+        setLoading(false);
+      }
+    };
+    initFirebase();
+  }, [toast]);
+
+  const fetchData = useCallback(async (currentUser: PlatformUser, dbInstance: Firestore) => {
     setLoading(true);
     try {
-      const tagsCollection = collection(db, "tags");
-      const contactsCollection = collection(db, "contacts");
+      const tagsCollection = collection(dbInstance, "tags");
+      const contactsCollection = collection(dbInstance, "contacts");
 
       const interestsBaseQuery = [where("type", "==", "interest")];
       if (currentUser.role !== 'superadmin') {
@@ -61,6 +76,7 @@ export default function AdminInterestsPage() {
         id: doc.id,
         name: doc.data().name,
         contactCount: interestContactCounts.get(doc.id) || 0,
+        ownerId: doc.data().ownerId, 
       }));
 
       setInterests(interestsData);
@@ -71,42 +87,52 @@ export default function AdminInterestsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
-    if (authLoading) {
+    if (authLoading || !db) {
       setLoading(true);
       return;
     }
     if(user) {
-      fetchData(user);
+      fetchData(user, db);
+    } else {
+      setLoading(false);
     }
-  }, [user, authLoading]);
+  }, [user, authLoading, db, fetchData]);
 
   const handleSuccess = () => {
     setIsModalOpen(false);
-    if (user) {
-        fetchData(user);
+    if (user && db) {
+      fetchData(user, db);
     }
   };
 
+  const columns = createColumns(handleSuccess);
+
+  const isLoading = loading || authLoading || !db;
+
   return (
     <>
-      <GroupModal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)}
-        onSuccess={handleSuccess}
-        type="interest"
-      />
+      {user && (
+          <GroupModal 
+            isOpen={isModalOpen} 
+            onClose={() => setIsModalOpen(false)}
+            onSuccess={handleSuccess}
+            type="interest"
+            ownerId={user.id}
+          />
+      )}
 
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
         <div className="flex items-center justify-between">
           <Heading 
-            title={`Meus Interesses (${loading ? '...' : interests.length})`}
+            title={`Meus Interesses (${isLoading ? '...' : interests.length})`}
             description="Crie e gerencie interesses para segmentar seus contatos."
           />
-          <Button onClick={() => setIsModalOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" /> Adicionar Interesse
+          <Button onClick={() => setIsModalOpen(true)} disabled={isLoading}>
+             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />} 
+            Adicionar Interesse
           </Button>
         </div>
         <Separator />
@@ -117,6 +143,7 @@ export default function AdminInterestsPage() {
           searchKey="name"
           placeholder="Filtrar por nome do interesse..."
           emptyMessage="Nenhum interesse encontrado. Crie um para começar!"
+          isLoading={isLoading}
         />
       </div>
     </>

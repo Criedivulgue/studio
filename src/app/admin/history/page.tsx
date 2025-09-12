@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { collection, onSnapshot, query, where, orderBy } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { useEffect, useState, useCallback } from 'react';
+// CORREÇÃO: Remover import antigo do DB e adicionar os novos
+import { collection, onSnapshot, query, where, orderBy, Firestore } from 'firebase/firestore';
+import { ensureFirebaseInitialized, getFirebaseInstances } from '@/lib/firebase';
 import { useAuth } from '@/hooks/use-auth';
+import { useToast } from '@/hooks/use-toast';
 
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
@@ -14,51 +16,73 @@ const HistoryDataTable = createDataTable<HistoryEntry, any>();
 
 export default function HistoryPage() {
   const { user, loading: authLoading } = useAuth();
+  const { toast } = useToast();
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  // CORREÇÃO: Adicionar estado para o DB
+  const [db, setDb] = useState<Firestore | null>(null);
 
+  // CORREÇÃO: Efeito para inicializar o Firebase
   useEffect(() => {
-    if (authLoading) {
-      setLoading(true);
-      return;
+    const initFirebase = async () => {
+      try {
+        await ensureFirebaseInitialized();
+        const { db: firestoreDb } = getFirebaseInstances();
+        setDb(firestoreDb);
+      } catch (error) {
+        console.error("Firebase init error:", error);
+        toast({ variant: 'destructive', title: 'Erro de Inicialização', description: 'Não foi possível carregar o histórico.' });
+        setLoading(false);
+      }
+    };
+    initFirebase();
+  }, [toast]);
+
+  // CORREÇÃO: Efeito para escutar as alterações no histórico, dependente do DB
+  useEffect(() => {
+    if (authLoading || !db || !user?.id) {
+        if (!authLoading) setLoading(false);
+        if (!user?.id) setHistory([]); // Limpa o histórico se o usuário deslogar
+        return;
     }
 
-    if (user?.id) {
-      const conversationsQuery = query(
-        collection(db, 'conversations'),
-        where('adminId', '==', user.id),
-        where('status', '==', 'archived'),
-        orderBy('archivedAt', 'desc')
-      );
+    setLoading(true);
+    const conversationsQuery = query(
+      collection(db, 'conversations'),
+      where('adminId', '==', user.id),
+      where('status', '==', 'archived'),
+      orderBy('archivedAt', 'desc')
+    );
 
-      const unsubscribe = onSnapshot(conversationsQuery, (snapshot) => {
-        const historyData: HistoryEntry[] = snapshot.docs.map(doc => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            contactName: data.contactName || 'Desconhecido',
-            summary: data.summary || 'Nenhum resumo disponível.',
-            archivedAt: data.archivedAt?.toDate().toISOString() || new Date().toISOString(),
-          };
-        });
-        setHistory(historyData);
-        setLoading(false);
-      }, (error) => {
-        console.error("Erro ao buscar histórico: ", error);
-        setLoading(false);
+    const unsubscribe = onSnapshot(conversationsQuery, (snapshot) => {
+      const historyData: HistoryEntry[] = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          contactName: data.contactName || 'Desconhecido',
+          summary: data.summary || 'Nenhum resumo disponível.',
+          archivedAt: data.archivedAt?.toDate().toISOString() || new Date().toISOString(),
+        };
       });
+      setHistory(historyData);
+      setLoading(false);
+    }, (error) => {
+      console.error("Erro ao buscar histórico: ", error);
+      toast({ variant: "destructive", title: "Erro ao Carregar", description: "Não foi possível buscar as conversas arquivadas." });
+      setLoading(false);
+    });
 
-      return () => unsubscribe();
-    } else {
-        setLoading(false);
-        setHistory([]);
-    }
-  }, [user, authLoading]);
+    // Função de limpeza para parar de escutar quando o componente for desmontado
+    return () => unsubscribe();
+    
+  }, [user, authLoading, db, toast]);
+
+  const isLoading = loading || authLoading;
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <Heading 
-        title={`Histórico de Conversas (${loading ? '...' : history.length})`}
+        title={`Histórico de Conversas (${isLoading ? '...' : history.length})`}
         description="Visualize o arquivo de conversas passadas e seus resumos gerados por IA."
       />
       <Separator />
@@ -68,6 +92,7 @@ export default function HistoryPage() {
         searchKey="contactName"
         placeholder="Filtrar por contato..."
         emptyMessage="Nenhuma conversa arquivada encontrada."
+        isLoading={isLoading}
       />
     </div>
   );

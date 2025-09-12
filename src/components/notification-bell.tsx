@@ -9,15 +9,15 @@ import {
 } from "@/components/ui/popover";
 import { Badge } from '@/components/ui/badge';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/hooks/use-auth'; // Hook para obter o usuário logado
-import { db } from '@/lib/firebase'; // Instância do Firestore
+import { useAuth } from '@/hooks/use-auth';
+// CORREÇÃO: Importar funções de inicialização em vez de 'db' diretamente.
+import { ensureFirebaseInitialized, getFirebaseInstances } from '@/lib/firebase';
 import {
-  collection, query, where, onSnapshot, doc, writeBatch 
+  collection, query, where, onSnapshot, doc, writeBatch, Firestore
 } from 'firebase/firestore';
 
-// A interface da notificação agora corresponde ao documento do Firestore
 interface Notification {
-  id: string; // ID do documento do Firestore
+  id: string;
   title: string;
   body: string;
   url: string;
@@ -26,21 +26,36 @@ interface Notification {
 
 export function NotificationBell() {
   const router = useRouter();
-  const { user } = useAuth(); // Obtém o usuário logado
+  const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  // CORREÇÃO: Estado para a instância do Firestore.
+  const [db, setDb] = useState<Firestore | null>(null);
+
+  // CORREÇÃO: useEffect para inicializar o Firebase e obter a instância do db.
+  useEffect(() => {
+    const initDb = async () => {
+      try {
+        await ensureFirebaseInitialized();
+        const { db: firestoreDb } = getFirebaseInstances();
+        setDb(firestoreDb);
+      } catch (error) {
+        console.error("Erro ao inicializar o Firestore no NotificationBell:", error);
+      }
+    };
+    initDb();
+  }, []);
 
   useEffect(() => {
-    if (!user) return; // Se não houver usuário, não faz nada
+    // CORREÇÃO: Só executa se o usuário e o db existirem.
+    if (!user || !db) return;
 
-    // Query para buscar notificações não lidas para o usuário logado
     const q = query(
       collection(db, 'notifications'),
-      where('adminId', '==', user.id), // CORREÇÃO: user.uid -> user.id
+      where('adminId', '==', user.id),
       where('isRead', '==', false)
     );
 
-    // Listener em tempo real
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const newNotifications: Notification[] = snapshot.docs.map(d => ({
         id: d.id,
@@ -51,20 +66,18 @@ export function NotificationBell() {
       setUnreadCount(newNotifications.length);
     });
 
-    // Limpa o listener ao desmontar o componente
     return () => unsubscribe();
-  }, [user]); // Reexecuta se o usuário mudar
+  // CORREÇÃO: Adicionar 'db' como dependência.
+  }, [user, db]);
 
-  // Marca as notificações como lidas quando o popover é aberto
   const handleOpenChange = async (isOpen: boolean) => {
-    if (isOpen && notifications.length > 0) {
+    if (isOpen && notifications.length > 0 && db) {
       const batch = writeBatch(db);
       notifications.forEach(notif => {
         const notifRef = doc(db, 'notifications', notif.id);
         batch.update(notifRef, { isRead: true });
       });
       await batch.commit();
-      // O listener onSnapshot irá automaticamente limpar a lista
     }
   };
 
@@ -94,7 +107,6 @@ export function NotificationBell() {
           </div>
           <div className="grid gap-2">
             {notifications.length > 0 ? (
-              // Mostra as notificações não lidas mais recentes primeiro
               notifications.map((item) => (
                 <button
                   key={item.id}

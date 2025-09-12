@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { useState, useEffect, useCallback } from 'react';
+// CORREÇÃO: Mover tipos do Firestore para cá e importar inicializadores
+import { Firestore, collection, query, where, getDocs } from 'firebase/firestore';
+import { ensureFirebaseInitialized, getFirebaseInstances } from '@/lib/firebase';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import type { PlatformUser } from '@/lib/types';
@@ -24,14 +25,31 @@ export default function SuperAdminMyGroupsPage() {
   const [groups, setGroups] = useState<GroupColumn[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  // CORREÇÃO: Estado para a instância do Firestore
+  const [db, setDb] = useState<Firestore | null>(null);
 
-  const fetchData = async (currentUser: PlatformUser) => {
+  // CORREÇÃO: Inicializa o Firebase
+  useEffect(() => {
+    const initFirebase = async () => {
+      try {
+        await ensureFirebaseInitialized();
+        const { db: firestoreDb } = getFirebaseInstances();
+        setDb(firestoreDb);
+      } catch (error) {
+        console.error("Erro ao inicializar Firebase:", error);
+        toast({ variant: 'destructive', title: 'Erro de Inicialização', description: 'Não foi possível conectar ao banco de dados.' });
+        setLoading(false);
+      }
+    };
+    initFirebase();
+  }, [toast]);
+
+  const fetchData = useCallback(async (currentUser: PlatformUser, firestoreDb: Firestore) => {
     setLoading(true);
     try {
-      const tagsCollection = collection(db, "tags");
-      const contactsCollection = collection(db, "contacts");
+      const tagsCollection = collection(firestoreDb, "tags");
+      const contactsCollection = collection(firestoreDb, "contacts");
 
-      // MODIFICATION: Always filter by the current user's ID
       const groupsQuery = query(
         tagsCollection, 
         where("type", "==", "group"),
@@ -69,33 +87,42 @@ export default function SuperAdminMyGroupsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
-    if (authLoading) {
-      setLoading(true);
-      return;
+    if (!authLoading && user && db) {
+      fetchData(user, db);
+    } else if (!authLoading && !user) {
+      setLoading(false);
     }
-    if(user) {
-      fetchData(user);
-    }
-  }, [user, authLoading]);
+  }, [user, authLoading, db, fetchData]);
 
   const handleSuccess = () => {
     setIsModalOpen(false);
-    if (user) {
-      fetchData(user);
+    if (user && db) {
+      fetchData(user, db);
     }
   };
 
+  if (authLoading || !db) {
+      return (
+        <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+           <Heading title="Meus Grupos" description="Carregando seus grupos..."/>
+           <Separator />
+        </div>
+      )
+  }
+  
   return (
     <>
-      <GroupModal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)}
-        onSuccess={handleSuccess}
-        type="group"
-      />
+      {user && (
+          <GroupModal 
+            isOpen={isModalOpen} 
+            onClose={() => setIsModalOpen(false)}
+            onSuccess={handleSuccess}
+            type="group"
+          />
+      )}
 
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
         <div className="flex items-center justify-between">
@@ -103,7 +130,7 @@ export default function SuperAdminMyGroupsPage() {
             title={`Meus Grupos (${loading ? '...' : groups.length})`}
             description="Crie e gerencie seus grupos pessoais para organizar contatos."
           />
-          <Button onClick={() => setIsModalOpen(true)}>
+          <Button onClick={() => setIsModalOpen(true)} disabled={!user}>
             <Plus className="mr-2 h-4 w-4" /> Adicionar Grupo
           </Button>
         </div>

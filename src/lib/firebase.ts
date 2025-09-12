@@ -1,31 +1,61 @@
-// Import the functions you need from the SDKs you need
-import { initializeApp, getApps, getApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
-import { getAuth } from "firebase/auth";
-import { getStorage } from "firebase/storage";
-import { getDatabase } from "firebase/database";
-// 1. Importar o getFunctions para o Cloud Functions
-import { getFunctions } from "firebase/functions";
+import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
+import { getFirestore, Firestore } from "firebase/firestore";
+import { getAuth, Auth } from "firebase/auth";
+import { getStorage, FirebaseStorage } from "firebase/storage";
+import { getDatabase, Database } from "firebase/database";
+import { getFunctions, Functions } from "firebase/functions";
 
-// Your web app's Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyB3qOq0uWY2DnmmN08A6L8Gn0_qYvfIatI",
-  authDomain: "omniflow-ai-mviw9.firebaseapp.com",
-  projectId: "omniflow-ai-mviw9",
-  storageBucket: "omniflow-ai-mviw9.firebasestorage.app",
-  messagingSenderId: "904294888593",
-  appId: "1:904294888593:web:2b8ad0686d59f65d07bb30",
-  databaseURL: "https://omniflow-ai-mviw9-default-rtdb.firebaseio.com/"
+let app: FirebaseApp;
+let auth: Auth;
+let db: Firestore;
+let storage: FirebaseStorage;
+let rtdb: Database;
+let functions: Functions;
+
+const initializeFirebase = async () => {
+  if (getApps().length) {
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/firebase-config');
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Falha ao buscar a configuração do Firebase. Status: ${response.status}. Resposta: ${errorText}`);
+    }
+    const firebaseConfig = await response.json();
+
+    if (!firebaseConfig.apiKey) {
+        throw new Error('Configuração do Firebase inválida recebida da API.');
+    }
+
+    app = initializeApp(firebaseConfig);
+    
+  } catch (error) {
+    console.error("ERRO CRÍTICO: Falha ao inicializar o Firebase.", error);
+    throw error;
+  }
 };
 
-// Initialize Firebase
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-const db = getFirestore(app);
-const auth = getAuth(app);
-const storage = getStorage(app);
-const rtdb = getDatabase(app);
-// 2. Inicializar o Cloud Functions
-const functions = getFunctions(app, 'southamerica-east1'); // Especificar a região é uma boa prática
+let firebaseInitializationPromise: Promise<void> | null = null;
 
-// 3. Exportar a nova instância do functions
-export { app, db, auth, storage, rtdb, functions };
+export const ensureFirebaseInitialized = () => {
+  if (!firebaseInitializationPromise) {
+    firebaseInitializationPromise = initializeFirebase();
+  }
+  return firebaseInitializationPromise;
+};
+
+export const getFirebaseInstances = () => {
+    if (!app) {
+        throw new Error("Tentativa de usar o Firebase antes da conclusão da inicialização.");
+    }
+    
+    if (!db) db = getFirestore(app);
+    if (!auth) auth = getAuth(app);
+    if (!storage) storage = getStorage(app);
+    if (!rtdb) rtdb = getDatabase(app);
+    if (!functions) functions = getFunctions(app, 'southamerica-east1');
+    
+    return { app, db, auth, storage, rtdb, functions };
+}

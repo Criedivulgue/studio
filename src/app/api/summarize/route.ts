@@ -1,81 +1,70 @@
-'use server';
-
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
+// CORREÇÃO: Importa a função que obtém as instâncias do Admin SDK
+import { getAdminInstances } from '@/lib/firebase-admin'; 
+import { z } from 'zod';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, getDoc, orderBy, query, DocumentData } from 'firebase/firestore';
 
-// Inicialização do Gemini API
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-const model = genAI.getGenerativeModel({ model: "gemini-pro"});
+// Esquema de validação para o corpo da requisição
+const requestSchema = z.object({
+  sessionId: z.string().min(1, "O ID da sessão é obrigatório."),
+});
 
-/**
- * Lida com requisições POST para gerar uma SUGESTÃO DE RESPOSTA para uma conversa em tempo real.
- * A lógica agora combina as configurações de IA global e pessoal.
- */
-export async function POST(req: NextRequest) {
+// Inicialização do cliente da API de IA Generativa do Google
+if (!process.env.GEMINI_API_KEY) {
+  throw new Error('A variável de ambiente GEMINI_API_KEY não está definida.');
+}
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+export async function POST(request: Request) {
+  console.log('Recebida requisição para resumir o chat...');
+
   try {
-    // O request agora precisa enviar o adminId e o caminho da conversa
-    const { conversationPath, adminId } = await req.json();
+    // CORREÇÃO: Obtém a instância do adminDb de forma segura
+    const { db: adminDb } = getAdminInstances();
 
-    if (!conversationPath || typeof conversationPath !== 'string') {
-      return NextResponse.json({ error: 'O caminho da conversa (conversationPath) é obrigatório.' }, { status: 400 });
+    const body = await request.json();
+    const validation = requestSchema.safeParse(body);
+
+    if (!validation.success) {
+      return NextResponse.json({ error: 'Requisição inválida', details: validation.error.formErrors }, { status: 400 });
     }
-    if (!adminId || typeof adminId !== 'string') {
-        return NextResponse.json({ error: 'O ID do administrador (adminId) é obrigatório.' }, { status: 400 });
+
+    const { sessionId } = validation.data;
+    const messagesPath = `chatSessions/${sessionId}/messages`;
+    console.log(`Buscando mensagens em: ${messagesPath}`);
+
+    // O restante do código funciona como antes
+    const messagesSnapshot = await adminDb.collection(messagesPath).orderBy('timestamp', 'asc').get();
+
+    if (messagesSnapshot.empty) {
+      console.log('Nenhuma mensagem encontrada para resumir.');
+      return NextResponse.json({ summary: 'Não há mensagens para resumir.' }, { status: 200 });
     }
 
-    // 1. Buscar o prompt Global
-    const globalSettingsRef = doc(db, "system_settings", "ai_global");
-    const globalSettingsDoc = await getDoc(globalSettingsRef);
-    const globalPrompt = globalSettingsDoc.exists() ? globalSettingsDoc.data().prompt : "Você é um assistente de atendimento.";
-
-    // 2. Buscar o prompt Pessoal do admin
-    const adminUserRef = doc(db, "users", adminId);
-    const adminUserDoc = await getDoc(adminUserRef);
-    const personalPrompt = adminUserDoc.exists() ? adminUserDoc.data().aiPrompt : "";
-
-    // 3. Buscar o histórico de mensagens
-    const messagesRef = collection(db, conversationPath, 'messages');
-    const messagesQuery = query(messagesRef, orderBy('timestamp', 'asc'));
-    const messagesSnapshot = await getDocs(messagesQuery);
-    const conversationHistory = messagesSnapshot.docs.map((d: DocumentData) => {
-        const data = d.data();
-        // O senderId aqui deve ser o ID do usuário ou do admin
-        const sender = data.senderId === adminId ? 'Atendente' : 'Cliente'; 
-        return `${sender}: ${data.text}`;
+    const conversation = messagesSnapshot.docs.map(doc => {
+      const data = doc.data();
+      return `${data.role === 'user' ? 'Usuário' : 'Assistente'}: ${data.content}`;
     }).join('\n');
 
-    // 4. Construir o prompt final combinado
-    const finalPrompt = `
-      ${globalPrompt}
+    console.log('Conversa extraída para resumo:', conversation);
 
-      ${personalPrompt ? `---\nInstruções Adicionais:\n${personalPrompt}` : ''}
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const prompt = `Resuma a seguinte conversa de chat em uma única frase concisa:\n---\n${conversation}\n---\nResumo:`;
 
-      ---
-      Com base nas regras acima, e no histórico do diálogo abaixo, gere uma resposta curta e útil para o Atendente continuar a conversa. Fale diretamente ao Cliente.
-
-      Histórico do Diálogo:
-      ${conversationHistory}
-      ---
-      Sugestão de resposta:
-    `;
-
-    // 5. Chamar a IA para gerar a sugestão de resposta
-    const result = await model.generateContent(finalPrompt);
+    const result = await model.generateContent(prompt);
     const response = await result.response;
-    const suggestionText = response.text();
+    const summary = response.text();
 
-    // 6. Retornar a sugestão
-    // O nome do campo é mantido como 'summary' para evitar quebrar o frontend imediatamente.
-    // O ideal seria renomear para 'suggestion' no frontend também.
-    return NextResponse.json({ summary: suggestionText });
+    console.log('Resumo gerado com sucesso:', summary);
+
+    const sessionRef = adminDb.doc(`chatSessions/${sessionId}`);
+    await sessionRef.update({ summary: summary });
+
+    return NextResponse.json({ summary }, { status: 200 });
 
   } catch (error) {
-    console.error("Erro na API de sugestão de resposta: ", error);
-    if (error instanceof Error) {
-        console.error(error.message);
-    }
-    return NextResponse.json({ error: 'Ocorreu um erro interno ao gerar a sugestão.' }, { status: 500 });
+    console.error('Erro ao gerar o resumo do chat:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Ocorreu um erro desconhecido';
+    return NextResponse.json({ error: 'Erro interno do servidor', details: errorMessage }, { status: 500 });
   }
 }

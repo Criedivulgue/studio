@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -20,22 +20,43 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Edit, MoreHorizontal, Trash, Copy } from 'lucide-react';
+import { Edit, MoreHorizontal, Trash, Copy, Loader2 } from 'lucide-react';
 import { GroupColumn } from './columns';
-import { db } from '@/lib/firebase';
-import { doc, deleteDoc } from 'firebase/firestore';
+import { doc, deleteDoc, Firestore } from 'firebase/firestore';
+import { ensureFirebaseInitialized, getFirebaseInstances } from '@/lib/firebase';
 
 import { GroupModal } from './group-modal';
 
 interface CellActionProps {
   data: GroupColumn;
+  refetch: () => void;
 }
 
-export const CellAction: React.FC<CellActionProps> = ({ data }) => {
+export const CellAction: React.FC<CellActionProps> = ({ data, refetch }) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [openAlert, setOpenAlert] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [db, setDb] = useState<Firestore | null>(null);
+
+  useEffect(() => {
+    const initFirebase = async () => {
+      try {
+        await ensureFirebaseInitialized();
+        const { db: firestoreDb } = getFirebaseInstances();
+        setDb(firestoreDb);
+      } catch (error) {
+        console.error("Firebase init error in CellAction:", error);
+        toast({
+          variant: 'destructive',
+          title: 'Erro de Inicialização',
+          description: 'Ações indisponíveis no momento.'
+        });
+      }
+    };
+    initFirebase();
+  }, [toast]);
+
 
   const onCopy = (id: string) => {
     navigator.clipboard.writeText(id);
@@ -43,13 +64,15 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   };
 
   const onDeleteConfirm = async () => {
+    if (!db) {
+      toast({ variant: 'destructive', title: 'Erro', description: 'Banco de dados não inicializado.' });
+      return;
+    }
     setLoading(true);
     try {
-      // ATENÇÃO: A coleção aqui pode ser 'groups' ou 'tags'. Verifique o nome correto no seu Firestore.
-      // Com base no contexto, parece que deveria ser 'groups', mas o código original usava 'tags'.
-      // Vou manter 'tags' para evitar introduzir um novo erro, mas isso deve ser revisado.
       await deleteDoc(doc(db, 'tags', data.id));
       toast({ title: 'Grupo Excluído' });
+      refetch();
     } catch (error) {
       console.error("Falha ao excluir grupo: ", error);
       toast({ variant: 'destructive', title: 'Erro ao Excluir', description: 'Não foi possível remover o grupo.' });
@@ -59,16 +82,19 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
     }
   };
 
+  const handleEditSuccess = () => {
+    setIsEditModalOpen(false);
+    refetch();
+  };
+
+  const actionsDisabled = loading || !db;
+
   return (
     <>
-      {/* ETAPA DE CORREÇÃO: Adicionar a propriedade obrigatória 'onSuccess' */}
       <GroupModal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
-        onSuccess={() => {
-          setIsEditModalOpen(false);
-          toast({ title: 'Grupo atualizado com sucesso!' });
-        }}
+        onSuccess={handleEditSuccess}
         type="group"
         initialData={data}
       />
@@ -84,7 +110,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
           <AlertDialogFooter>
             <AlertDialogCancel disabled={loading}>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={onDeleteConfirm} disabled={loading} className="bg-destructive hover:bg-destructive/90">
-              {loading ? 'Excluindo...' : 'Continuar'}
+              {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Excluindo...</> : 'Continuar'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -92,9 +118,9 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="h-8 w-8 p-0">
+          <Button variant="ghost" className="h-8 w-8 p-0" disabled={actionsDisabled}>
             <span className="sr-only">Abrir menu</span>
-            <MoreHorizontal className="h-4 w-4" />
+            {actionsDisabled ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">

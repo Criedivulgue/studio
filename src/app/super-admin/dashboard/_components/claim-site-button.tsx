@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+// CORREÇÃO: Importar Firestore e funções de inicialização
+import { Firestore, doc, setDoc, getDoc } from 'firebase/firestore';
+import { ensureFirebaseInitialized, getFirebaseInstances } from '@/lib/firebase';
 import { useAuth } from '@/hooks/use-auth';
-import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 
 import { Button } from '@/components/ui/button';
@@ -17,16 +18,33 @@ export function ClaimSiteButton() {
   const { toast } = useToast();
   const [status, setStatus] = useState<Status>('loading');
   const [isUpdating, setIsUpdating] = useState(false);
+  // CORREÇÃO: Estado para a instância do DB
+  const [db, setDb] = useState<Firestore | null>(null);
+
+  // CORREÇÃO: Inicializa o Firebase
+  useEffect(() => {
+    const initFirebase = async () => {
+      try {
+        await ensureFirebaseInitialized();
+        const { db: firestoreDb } = getFirebaseInstances();
+        setDb(firestoreDb);
+      } catch (error) {
+        console.error("Firebase init error:", error);
+        toast({ title: 'Erro de Inicialização', description: 'Não foi possível conectar ao banco de dados.', variant: 'destructive'});
+      }
+    };
+    initFirebase();
+  }, [toast]);
 
   useEffect(() => {
-    if (!user) return;
+    // CORREÇÃO: Aguarda o DB e o usuário estarem prontos
+    if (!user || !db) return;
 
     const checkClaimStatus = async () => {
       try {
         const configDocRef = doc(db, 'public_config', 'global');
         const docSnap = await getDoc(configDocRef);
 
-        // CORREÇÃO: Usar user.id em vez de user.uid
         if (docSnap.exists() && docSnap.data().superAdminId === user.id) {
           setStatus('claimed');
         } else {
@@ -39,27 +57,28 @@ export function ClaimSiteButton() {
     };
 
     checkClaimStatus();
-  }, [user]);
+  }, [user, db]); // CORREÇÃO: Adicionada dependência do DB
 
   const handleClaimSite = async () => {
-    console.log("Tentando reivindicar o site com este usuário:", JSON.stringify(user, null, 2));
-
-    // CORREÇÃO: A verificação de permissão está correta (user.role), mas o ID a ser salvo estava errado.
     if (!user || user.role !== 'superadmin') {
       toast({ title: 'Erro de Permissão', description: 'Apenas o Super Administrador pode executar esta ação.', variant: 'destructive' });
       return;
     }
 
-    // CORREÇÃO: Garantir que user.id existe antes de prosseguir
     if (!user.id) {
-        toast({ title: 'Erro Crítico', description: 'O ID do usuário não foi encontrado. Não é possível continuar.', variant: 'destructive' });
+        toast({ title: 'Erro Crítico', description: 'O ID do usuário não foi encontrado.', variant: 'destructive' });
+        return;
+    }
+
+    // CORREÇÃO: Verifica se o DB está pronto
+    if (!db) {
+        toast({ title: 'Erro', description: 'O banco de dados não está pronto.', variant: 'destructive' });
         return;
     }
 
     setIsUpdating(true);
     try {
       const configRef = doc(db, 'public_config', 'global');
-      // CORREÇÃO: Passar user.id para o banco de dados
       await setDoc(configRef, { superAdminId: user.id }); 
       setStatus('claimed');
       toast({
@@ -74,7 +93,8 @@ export function ClaimSiteButton() {
     }
   };
 
-  if (status === 'loading') {
+  // CORREÇÃO: o status de loading agora depende da inicialização do DB também
+  if (status === 'loading' || !db) {
     return (
       <Card>
         <CardHeader>

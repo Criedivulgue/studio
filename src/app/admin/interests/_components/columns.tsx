@@ -1,21 +1,23 @@
-'use client'
+'use client';
 
-import { ColumnDef } from "@tanstack/react-table"
-import { CellAction } from "./cell-action"
+import { ColumnDef } from "@tanstack/react-table";
+import { CellAction } from "./cell-action";
 
-// Adaptado para Interesses
+// Definição da estrutura de dados para a coluna de interesses
 export type InterestColumn = {
-  id: string
-  name: string
-}
+  id: string;
+  name: string;
+};
 
-export const columns: ColumnDef<InterestColumn>[] = [
+// Função factory para criar as colunas de interesses
+export const createColumns = (refetch: () => void): ColumnDef<InterestColumn>[] => [
   {
     accessorKey: "name",
-    header: "Nome do Interesse", // Título da coluna alterado
+    header: "Nome do Interesse",
   },
   {
     id: "actions",
-    cell: ({ row }) => <CellAction data={row.original} />,
+    // Passa a função de refetch para o componente de ação
+    cell: ({ row }) => <CellAction data={row.original} refetch={refetch} />,
   },
-]
+];

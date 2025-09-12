@@ -1,62 +1,78 @@
+/*
+  Este é o Service Worker para o Firebase Cloud Messaging.
+  Ele roda em segundo plano, separado da janela principal do navegador, 
+  para receber notificações push mesmo quando a aba do site está fechada.
+*/
+
+// Garante que o novo service worker substitua o antigo e assuma o controle rapidamente.
 self.addEventListener('install', (event) => {
-  self.skipWaiting(); // Garante que o novo service worker ative imediatamente
+  console.log('Service Worker: Instalando...');
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim()); // Torna o service worker ativo o controlador da página imediatamente
+  console.log('Service Worker: Ativando...');
+  event.waitUntil(self.clients.claim());
 });
 
-// Importa os scripts do Firebase
-importScripts('https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/9.6.1/firebase-messaging-compat.js');
+// 1. Importar os scripts do SDK MODULAR (v9+) do Firebase.
+importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js');
 
-// Variável para guardar a configuração do Firebase
-let firebaseConfig = null;
 
-// Função para buscar a configuração do servidor
-const fetchFirebaseConfig = async () => {
+// 2. Função de inicialização UNIFICADA E SEGURA
+const initializeFirebase = async () => {
+  // CORREÇÃO: Usar o namespace firebase.app
+  if (firebase.app.getApps().length > 0) {
+    return firebase.app.getApp();
+  }
+
   try {
-    // O caminho é relativo à origem do site
+    // Busca a configuração da nossa API segura, assim como o app principal faz.
     const response = await fetch('/api/firebase-config');
     if (!response.ok) {
-      throw new Error('Failed to fetch Firebase config');
+      throw new Error('Falha ao buscar a configuração do Firebase no Service Worker.');
     }
-    firebaseConfig = await response.json();
+    const firebaseConfig = await response.json();
+    
+    console.log('Service Worker: Configuração recebida, inicializando o Firebase...');
+    // CORREÇÃO: Usar o namespace firebase.app
+    return firebase.app.initializeApp(firebaseConfig);
+
   } catch (error) {
-    console.error('Error fetching Firebase config:', error);
+    console.error('Service Worker: ERRO CRÍTICO ao inicializar o Firebase:', error);
     return null;
   }
 };
 
-// Função de inicialização do Firebase
-const initializeFirebase = async () => {
-  if (!firebaseConfig) {
-    await fetchFirebaseConfig();
-  }
+// 3. Função para configurar o manipulador de mensagens em segundo plano
+const setupBackgroundMessageHandler = async () => {
+    // Garante que o Firebase esteja inicializado
+    const app = await initializeFirebase();
+    if (!app) {
+        console.log("Service Worker: Falha na inicialização do Firebase, o manipulador de mensagens não será configurado.");
+        return;
+    }
 
-  if (firebaseConfig && firebase.apps.length === 0) {
-    console.log('Service Worker: Initializing Firebase with fetched config.');
-    firebase.initializeApp(firebaseConfig);
-    const messaging = firebase.messaging();
+    console.log("Service Worker: Firebase inicializado, configurando o manipulador de mensagens em segundo plano.");
+    // CORREÇÃO: Usar o namespace firebase.messaging
+    const messaging = firebase.messaging.getMessaging(app);
 
-    messaging.onBackgroundMessage((payload) => {
-      console.log(
-        '[firebase-messaging-sw.js] Received background message ',
-        payload
-      );
-      // TODO: Customize notification here
-      const notificationTitle = payload.notification.title || 'Nova Mensagem';
-      const notificationOptions = {
-        body: payload.notification.body || '',
-        icon: payload.notification.icon || '/firebase-logo.png',
-      };
+    // CORREÇÃO: Usar o namespace firebase.messaging
+    firebase.messaging.onBackgroundMessage(messaging, (payload) => {
+        console.log('[firebase-messaging-sw.js] Mensagem recebida em segundo plano: ', payload);
 
-      self.registration.showNotification(notificationTitle, notificationOptions);
+        // Extrai o título e as opções da notificação
+        const notificationTitle = payload.notification?.title || 'Nova Mensagem';
+        const notificationOptions = {
+            body: payload.notification?.body || '',
+            icon: payload.notification?.icon || '/favicon.ico'
+        };
+
+        // Exibe a notificação para o usuário
+        self.registration.showNotification(notificationTitle, notificationOptions);
     });
-  } else {
-    console.log('Service Worker: Firebase already initialized or config fetch failed.');
-  }
-};
+}
 
-// Inicializa o Firebase ao carregar o script
-initializeFirebase();
+// Inicia a configuração do manipulador de mensagens
+setupBackgroundMessageHandler();

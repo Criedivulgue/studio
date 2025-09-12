@@ -1,134 +1,109 @@
 import {
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  signOut, 
-  onAuthStateChanged,
-  User as FirebaseUser
-} from 'firebase/auth';
-import { doc, getDoc, setDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
-// CORREÇÃO: Importando PlatformUser e removendo User não utilizado
-import type { PlatformUser, UserRole, PublicProfile } from '@/lib/types';
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  sendPasswordResetEmail,
+  GoogleAuthProvider,
+  signInWithPopup,
+} from "firebase/auth";
+import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
+
+// 1. Importar as NOVAS funções de inicialização
+import { ensureFirebaseInitialized, getFirebaseInstances } from '@/lib/firebase';
+import { PlatformUser } from "@/lib/types";
+
+// --- FUNÇÕES DE SERVIÇO DE AUTENTICAÇÃO ATUALIZADAS ---
 
 /**
- * Inscreve um novo usuário, determinando sua função e criando seus documentos.
+ * Registra um novo usuário com e-mail e senha.
  */
-// CORREÇÃO: Retornando PlatformUser e usando os novos tipos
-export async function signUp(email: string, password: string, name: string): Promise<PlatformUser> {
-  const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-  const firebaseUser = userCredential.user;
+export const register = async (name: string, email: string, pass: string): Promise<PlatformUser> => {
+  // 2. Garante a inicialização e obtém as instâncias
+  await ensureFirebaseInitialized();
+  const { auth, db } = getFirebaseInstances();
 
-  const appStatusRef = doc(db, 'config', 'app_status');
-  const userRef = doc(db, 'users', firebaseUser.uid);
-  const publicProfileRef = doc(db, 'public_profiles', firebaseUser.uid);
+  const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+  const user = userCredential.user;
 
-  try {
-    // A transação garante que a criação do usuário e a verificação de status sejam atômicas
-    const determinedRole = await runTransaction(db, async (transaction) => {
-      const appStatusDoc = await transaction.get(appStatusRef);
-      let role: UserRole;
+  const newUser: Omit<PlatformUser, 'id'> = {
+    email: user.email!,
+    name: name,
+    role: 'user', // Por padrão, o papel é 'user'
+    status: 'active', // Por padrão, o status é 'active'
+    whatsapp: '', // Opcional, pode ser preenchido depois
+    createdAt: serverTimestamp(),
+  };
 
-      if (!appStatusDoc.exists() || !appStatusDoc.data().initialized) {
-        role = 'superadmin';
-        // CORREÇÃO: Usando a nomenclatura 'superAdminId'
-        transaction.set(appStatusRef, { initialized: true, superAdminId: firebaseUser.uid });
-      } else {
-        role = 'admin';
-      }
-      
-      // CORREÇÃO: Criando um objeto que corresponde a PlatformUser (sem o id, que é a chave do doc)
-      const newUserForDb: Omit<PlatformUser, 'id'> = {
-        name,
-        email: firebaseUser.email!,
-        role,
-        createdAt: new Date(), // Usando new Date() para consistência com o código antigo
-        status: 'active',
-        whatsapp: '',
-        // Propriedades opcionais podem ser omitidas
-      };
+  await setDoc(doc(db, "users", user.uid), newUser);
 
-      const newPublicProfile: PublicProfile = {
-        displayName: name, 
-        avatarUrl: '',     
-        greeting: 'Olá! Como posso ajudar hoje?',
-        // CORREÇÃO: Usando o uid do firebaseUser como ownerId
-        ownerId: firebaseUser.uid,
-      };
+  return { id: user.uid, ...newUser };
+};
 
-      transaction.set(userRef, newUserForDb);
-      transaction.set(publicProfileRef, newPublicProfile);
+/**
+ * Autentica um usuário com e-mail e senha.
+ */
+export const login = async (email: string, pass: string): Promise<PlatformUser> => {
+  await ensureFirebaseInitialized();
+  const { auth, db } = getFirebaseInstances();
 
-      return role;
-    });
+  const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+  const user = userCredential.user;
 
-    // CORREÇÃO: Construindo e retornando o objeto PlatformUser completo
-    const newUser: PlatformUser = {
-      id: firebaseUser.uid,
-      email: firebaseUser.email!,
-      name,
-      role: determinedRole,
-      createdAt: new Date(),
-      status: 'active',
-      whatsapp: '',
-    };
-    
-    return newUser;
-
-  } catch (error) {
-    console.error('Falha na transação de cadastro:', error);
-    // É uma boa prática relançar o erro para que a UI possa reagir
-    throw new Error('Falha ao criar o usuário e seu perfil no banco de dados.');
+  const userDoc = await getDoc(doc(db, "users", user.uid));
+  if (!userDoc.exists()) {
+    throw new Error("Dados do usuário não encontrados no Firestore.");
   }
-}
+
+  return { id: user.uid, ...userDoc.data() } as PlatformUser;
+};
 
 /**
- * Autentica um usuário existente.
+ * Realiza o logout do usuário.
  */
-export async function signIn(email: string, password: string): Promise<FirebaseUser> {
-  const userCredential = await signInWithEmailAndPassword(auth, email, password);
-  return userCredential.user;
-}
-
-/**
- * Desconecta o usuário atual.
- */
-export async function logout(): Promise<void> {
+export const logout = async (): Promise<void> => {
+  await ensureFirebaseInitialized();
+  const { auth } = getFirebaseInstances();
   await signOut(auth);
-}
+};
 
 /**
- * Observador de estado de autenticação.
- * Passa o usuário bruto do Firebase para o callback.
+ * Envia um e-mail para redefinição de senha.
  */
-export function onAuthChange(callback: (user: FirebaseUser | null) => void): () => void {
-  return onAuthStateChanged(auth, (firebaseUser) => {
-    callback(firebaseUser);
-  });
-}
+export const resetPassword = async (email: string): Promise<void> => {
+  await ensureFirebaseInitialized();
+  const { auth } = getFirebaseInstances();
+  await sendPasswordResetEmail(auth, email);
+};
 
 /**
- * Busca o perfil de usuário do Firestore.
+ * Autentica um usuário com o provedor do Google.
  */
-// CORREÇÃO: Retornando Promise<PlatformUser | null>
-export async function getUserProfile(uid: string): Promise<PlatformUser | null> {
-  const userRef = doc(db, 'users', uid);
-  const userSnap = await getDoc(userRef);
+export const signInWithGoogle = async (): Promise<PlatformUser> => {
+  await ensureFirebaseInitialized();
+  const { auth, db } = getFirebaseInstances();
 
-  if (userSnap.exists()) {
-    const data = userSnap.data();
-    // CORREÇÃO: Construindo e retornando um objeto PlatformUser completo
-    return {
-        id: userSnap.id,
-        email: data.email,
-        name: data.name,
-        role: data.role,
-        createdAt: data.createdAt,
-        status: data.status,
-        whatsapp: data.whatsapp,
-        // Garantir que as propriedades opcionais existam ou sejam nulas
-        aiPrompt: data.aiPrompt || '',
-        contactGroups: data.contactGroups || [],
-    } as PlatformUser;
+  const provider = new GoogleAuthProvider();
+  const result = await signInWithPopup(auth, provider);
+  const user = result.user;
+
+  // Verifica se o usuário já existe no Firestore
+  const userDocRef = doc(db, "users", user.uid);
+  const userDoc = await getDoc(userDocRef);
+
+  if (!userDoc.exists()) {
+    // Se não existir, cria um novo registro de usuário
+    const newUser: Omit<PlatformUser, 'id'> = {
+      email: user.email!,
+      name: user.displayName || "Usuário Google",
+      role: 'user',
+      status: 'active',
+      whatsapp: user.phoneNumber || '',
+      createdAt: serverTimestamp(),
+    };
+    await setDoc(userDocRef, newUser);
+    return { id: user.uid, ...newUser };
+  } else {
+    // Se já existir, apenas retorna os dados existentes
+    return { id: user.uid, ...userDoc.data() } as PlatformUser;
   }
-  return null;
-}
+};

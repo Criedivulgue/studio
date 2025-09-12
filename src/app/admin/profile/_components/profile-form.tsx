@@ -4,9 +4,9 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { doc, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
-import { db } from '@/lib/firebase';
+import { Firestore, doc, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { Auth, onAuthStateChanged } from 'firebase/auth';
+import { ensureFirebaseInitialized, getFirebaseInstances } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 
 import { Button } from '@/components/ui/button';
@@ -16,9 +16,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2 } from 'lucide-react';
 import { ImageUploader } from '@/components/ui/image-uploader';
-import type { PublicProfile } from '@/lib/types';
+import type { PublicProfile, PlatformUser } from '@/lib/types';
 
-// 1. ATUALIZAR O SCHEMA PARA TORNAR O AVATAR OBRIGATÓRIO
 const profileFormSchema = z.object({
   displayName: z.string()
     .min(2, { message: 'O nome de exibição deve ter pelo menos 2 caracteres.' })
@@ -35,80 +34,99 @@ export function ProfileForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
   const { toast } = useToast();
-  const auth = getAuth();
-  const user = auth.currentUser;
+  
+  const [db, setDb] = useState<Firestore | null>(null);
+  const [auth, setAuth] = useState<Auth | null>(null);
+  const [user, setUser] = useState<PlatformUser | null>(null);
 
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileFormSchema),
-    defaultValues: {
-      displayName: '',
-      greeting: '',
-      avatarUrl: '',
-    },
-    // 2. ADICIONAR MODO DE VALIDAÇÃO 'onChange'
+    defaultValues: { displayName: '', greeting: '', avatarUrl: '' },
     mode: 'onChange',
   });
 
   useEffect(() => {
-    if (user) {
+    const initialize = async () => {
+      setIsFetching(true);
+      try {
+        await ensureFirebaseInitialized();
+        const { auth: authInstance, db: dbInstance } = getFirebaseInstances();
+        setAuth(authInstance);
+        setDb(dbInstance);
+
+        const unsubscribe = onAuthStateChanged(authInstance, async (firebaseUser) => {
+          if (firebaseUser) {
+            const userDocRef = doc(dbInstance, 'users', firebaseUser.uid);
+            const userDocSnap = await getDoc(userDocRef);
+            if (userDocSnap.exists()) {
+              setUser({ ...userDocSnap.data(), id: firebaseUser.uid } as PlatformUser);
+            }
+          } else {
+            setUser(null);
+            setIsFetching(false);
+          }
+        });
+        return unsubscribe;
+      } catch (error) {
+        console.error("Erro de inicialização do Firebase:", error);
+        toast({ title: 'Erro', description: 'Falha ao carregar. Recarregue a página.', variant: 'destructive' });
+        setIsFetching(false);
+      }
+    };
+    initialize();
+  }, [toast]);
+
+  useEffect(() => {
+    if (user && db) {
       const fetchProfile = async () => {
-        setIsFetching(true);
         try {
-          const publicProfileRef = doc(db, 'public_profiles', user.uid);
+          const publicProfileRef = doc(db, 'public_profiles', user.id);
           const publicProfileSnap = await getDoc(publicProfileRef);
 
           if (publicProfileSnap.exists()) {
             const profileData = publicProfileSnap.data() as PublicProfile;
-            form.reset({
-              displayName: profileData.displayName || '',
-              greeting: profileData.greeting || '',
-              avatarUrl: profileData.avatarUrl || '',
-            });
+            form.reset(profileData);
           } else {
-            const userDocRef = doc(db, 'users', user.uid);
-            const userDocSnap = await getDoc(userDocRef);
-            if (userDocSnap.exists()){
-                const userData = userDocSnap.data();
-                form.reset({ 
-                    displayName: userData.name || 'Novo Usuário', 
-                    greeting: 'Olá! Como posso ajudar?', 
-                    avatarUrl: userData.avatarUrl || '' 
-                });
-            }
+            form.reset({ 
+                displayName: user.name || 'Novo Usuário', 
+                greeting: 'Olá! Como posso ajudar?', 
+                avatarUrl: user.avatar || '' 
+            });
             console.warn('Perfil público não encontrado, usando dados de fallback.');
           }
         } catch (error) {
           console.error("Erro ao buscar perfil público:", error);
           toast({ title: 'Erro', description: 'Não foi possível carregar seu perfil.', variant: 'destructive' });
+        } finally {
+          setIsFetching(false);
         }
-        setIsFetching(false);
       };
       fetchProfile();
-    } else {
-      setIsFetching(false);
+    } else if (!user) {
+        setIsFetching(false);
     }
-  }, [user, form, toast]);
+  }, [user, db, form, toast]);
 
   const onSubmit = async (data: ProfileFormValues) => {
-    if (!user) {
-      toast({ title: 'Erro de Autenticação', description: 'Você não está logado.', variant: 'destructive' });
+    if (!user || !db) {
+      toast({ title: 'Erro de Autenticação', description: 'Você não está logado ou o serviço não está pronto.', variant: 'destructive' });
       return;
     }
 
     setIsLoading(true);
     try {
       const batch = writeBatch(db);
-      const publicProfileRef = doc(db, 'public_profiles', user.uid);
-      const userRef = doc(db, 'users', user.uid);
+      const publicProfileRef = doc(db, 'public_profiles', user.id);
+      const userRef = doc(db, 'users', user.id);
 
       const publicProfileData: Partial<PublicProfile> = {
         displayName: data.displayName,
-        avatarUrl: data.avatarUrl || '',
-        greeting: data.greeting || 'Olá! Como posso ajudar hoje?',
+        avatarUrl: data.avatarUrl,
+        greeting: data.greeting,
       };
 
       batch.set(publicProfileRef, publicProfileData, { merge: true });
-      batch.update(userRef, { name: data.displayName });
+      batch.update(userRef, { name: data.displayName, avatarUrl: data.avatarUrl });
 
       await batch.commit();
 
@@ -116,9 +134,12 @@ export function ProfileForm() {
     } catch (error) {
       console.error("Erro ao atualizar perfil:", error);
       toast({ title: 'Erro', description: 'Não foi possível salvar as alterações.', variant: 'destructive' });
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
+
+  const canSubmit = !isLoading && !isFetching && form.formState.isValid && db && user;
 
   return (
     <Card>
@@ -142,7 +163,7 @@ export function ProfileForm() {
                     <FormLabel>Imagem de Perfil</FormLabel>
                     <FormControl>
                       <ImageUploader
-                        storagePath={`avatars/${user?.uid}`}
+                        storagePath={`avatars/${user?.id}`}
                         initialImageUrl={field.value}
                         onUploadComplete={(url) => {
                           form.setValue('avatarUrl', url, { shouldValidate: true });
@@ -182,8 +203,7 @@ export function ProfileForm() {
                   </FormItem>
                 )}
               />
-              {/* 3. DESABILITAR O BOTÃO SE O FORMULÁRIO FOR INVÁLIDO */}
-              <Button type="submit" disabled={isLoading || !form.formState.isValid}>
+              <Button type="submit" disabled={!canSubmit}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Salvar Alterações
               </Button>

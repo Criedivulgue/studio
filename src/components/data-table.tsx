@@ -23,9 +23,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+// CORREÇÃO: Importar o ícone de carregamento
+import { Loader2 } from 'lucide-react';
 
-// CORREÇÃO: Transformando o componente em uma função que retorna um componente
-// Isso garante que os tipos TData e TValue sejam corretamente inferidos e mantidos.
 export function createDataTable<TData, TValue>() {
   interface DataTableProps {
     columns: ColumnDef<TData, TValue>[];
@@ -33,9 +33,19 @@ export function createDataTable<TData, TValue>() {
     searchKey: string;
     placeholder: string;
     emptyMessage: string;
+    // CORREÇÃO: Adicionar a propriedade isLoading
+    isLoading?: boolean;
   }
 
-  function DataTable({ columns, data, searchKey, placeholder, emptyMessage }: DataTableProps) {
+  function DataTable({ 
+    columns, 
+    data, 
+    searchKey, 
+    placeholder, 
+    emptyMessage, 
+    // CORREÇÃO: Receber a propriedade isLoading
+    isLoading = false 
+  }: DataTableProps) {
     const [sorting, setSorting] = useState<SortingState>([]);
     const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
@@ -64,6 +74,8 @@ export function createDataTable<TData, TValue>() {
               table.getColumn(searchKey)?.setFilterValue(event.target.value)
             }
             className="max-w-sm"
+            // CORREÇÃO: Desabilitar o input durante o carregamento
+            disabled={isLoading}
           />
         </div>
         <div className="rounded-md border">
@@ -87,7 +99,17 @@ export function createDataTable<TData, TValue>() {
               ))}
             </TableHeader>
             <TableBody>
-              {table.getRowModel().rows?.length ? (
+              {/* CORREÇÃO: Lógica de exibição de carregamento, dados ou mensagem vazia */}
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={columns.length} className="h-24 text-center">
+                    <div className="flex justify-center items-center">
+                        <Loader2 className="mr-2 h-6 w-6 animate-spin" />
+                        Carregando dados...
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : table.getRowModel().rows?.length ? (
                 table.getRowModel().rows.map((row) => (
                   <TableRow
                     key={row.id}
@@ -115,7 +137,8 @@ export function createDataTable<TData, TValue>() {
             variant="outline"
             size="sm"
             onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
+            // CORREÇÃO: Desabilitar o botão durante o carregamento
+            disabled={!table.getCanPreviousPage() || isLoading}
           >
             Anterior
           </Button>
@@ -123,7 +146,8 @@ export function createDataTable<TData, TValue>() {
             variant="outline"
             size="sm"
             onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
+            // CORREÇÃO: Desabilitar o botão durante o carregamento
+            disabled={!table.getCanNextPage() || isLoading}
           >
             Próxima
           </Button>

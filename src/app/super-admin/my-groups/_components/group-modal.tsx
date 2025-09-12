@@ -7,8 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
-import { db } from '@/lib/firebase';
+// CORREÇÃO: Remover import antigo do DB e adicionar os novos
 import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { ensureFirebaseInitialized, getFirebaseInstances } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 
 interface GroupModalProps {
@@ -56,8 +57,12 @@ export function GroupModal({ isOpen, onClose, onSuccess, type, initialData = nul
 
     setLoading(true);
     try {
+      // CORREÇÃO: Inicializar o Firebase e obter a instância do DB
+      await ensureFirebaseInitialized();
+      const { db } = getFirebaseInstances();
+
       if (isEditing) {
-        const docRef = doc(db, 'tags', initialData.id);
+        const docRef = doc(db, 'tags', initialData!.id);
         await updateDoc(docRef, { name: name.trim() });
       } else {
         await addDoc(collection(db, 'tags'), {

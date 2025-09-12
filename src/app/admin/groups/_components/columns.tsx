@@ -3,15 +3,15 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { CellAction } from "./cell-action";
 
-// 1. Definir a estrutura de dados para uma linha da tabela de grupos.
+// Definição da estrutura de dados para a coluna de grupos
 export type GroupColumn = {
   id: string;
   name: string;
   contactCount: number; // Número de contatos no grupo
 };
 
-// 2. Definir as colunas para o DataTable.
-export const columns: ColumnDef<GroupColumn>[] = [
+// Função factory para criar as colunas
+export const createColumns = (refetch: () => void): ColumnDef<GroupColumn>[] => [
   {
     accessorKey: "name",
     header: "Nome do Grupo",
@@ -19,12 +19,9 @@ export const columns: ColumnDef<GroupColumn>[] = [
   {
     accessorKey: "contactCount",
     header: "Nº de Contatos",
-    // Exibe o número de contatos.
-    cell: ({ row }) => <div>{row.original.contactCount}</div>,
   },
   {
     id: "actions",
-    // Renderiza o componente de ações (menu suspenso) para cada linha.
-    cell: ({ row }) => <CellAction data={row.original} />,
+    cell: ({ row }) => <CellAction data={row.original} refetch={refetch} />,
   },
 ];

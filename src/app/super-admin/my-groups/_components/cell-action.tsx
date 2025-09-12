@@ -22,8 +22,9 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Edit, MoreHorizontal, Trash, Copy } from 'lucide-react';
 import { GroupColumn } from './columns';
-import { db } from '@/lib/firebase';
+// CORREÇÃO: Remover import antigo do DB e adicionar os novos
 import { doc, deleteDoc } from 'firebase/firestore';
+import { ensureFirebaseInitialized, getFirebaseInstances } from '@/lib/firebase';
 
 import { GroupModal } from './group-modal';
 
@@ -45,12 +46,13 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const onDeleteConfirm = async () => {
     setLoading(true);
     try {
-      // ATENÇÃO: A coleção aqui pode ser 'groups' ou 'tags'. Verifique o nome correto no seu Firestore.
-      // Com base no contexto, parece que deveria ser 'groups', mas o código original usava 'tags'.
-      // Vou manter 'tags' para evitar introduzir um novo erro, mas isso deve ser revisado.
+      // CORREÇÃO: Inicializar o Firebase e obter a instância do DB
+      await ensureFirebaseInitialized();
+      const { db } = getFirebaseInstances();
+
       await deleteDoc(doc(db, 'tags', data.id));
       toast({ title: 'Grupo Excluído' });
-      // TODO: Add refresh logic here by passing a function from the parent
+      // TODO: Adicionar lógica de atualização aqui, talvez passando uma função do componente pai
     } catch (error) {
       console.error("Falha ao excluir grupo: ", error);
       toast({ variant: 'destructive', title: 'Erro ao Excluir', description: 'Não foi possível remover o grupo.' });
@@ -62,13 +64,14 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
 
   return (
     <>
+      {/* O GroupModal agora precisará obter a instância do DB por conta própria ou via props */}
       <GroupModal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
         onSuccess={() => {
           setIsEditModalOpen(false);
           toast({ title: 'Grupo atualizado com sucesso!' });
-          // TODO: Add refresh logic here
+          // TODO: Adicionar lógica de atualização aqui
         }}
         type="group"
         initialData={data}

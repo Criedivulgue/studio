@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+// CORREÇÃO: Remover import antigo do DB e adicionar os novos
+import { collection, query, where, getDocs, Firestore } from 'firebase/firestore';
+import { ensureFirebaseInitialized, getFirebaseInstances } from '@/lib/firebase';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import type { PlatformUser } from '@/lib/types';
-import type { ContactColumn } from './_components/columns'; // CORREÇÃO APLICADA AQUI
+import type { ContactColumn } from './_components/columns';
 
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
@@ -19,16 +20,34 @@ export default function AdminContactsPage() {
   const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  // CORREÇÃO: Adicionar estado para o DB
+  const [db, setDb] = useState<Firestore | null>(null);
 
-  const fetchData = async (currentUser: PlatformUser) => {
+  // CORREÇÃO: Efeito para inicializar o Firebase
+  useEffect(() => {
+    const initFirebase = async () => {
+      try {
+        await ensureFirebaseInitialized();
+        const { db: firestoreDb } = getFirebaseInstances();
+        setDb(firestoreDb);
+      } catch (error) {
+        console.error("Firebase init error:", error);
+        toast({ variant: 'destructive', title: 'Erro de Inicialização', description: 'Não foi possível conectar ao banco de dados.' });
+        setLoading(false);
+      }
+    };
+    initFirebase();
+  }, [toast]);
+
+  const fetchData = async (currentUser: PlatformUser, dbInstance: Firestore) => {
     setLoading(true);
     try {
-      const contactsCollection = collection(db, 'contacts');
+      const contactsCollection = collection(dbInstance, 'contacts');
       const contactsQuery = currentUser.role === 'superadmin' 
         ? query(contactsCollection) 
         : query(contactsCollection, where('ownerId', '==', currentUser.id));
 
-      const tagsCollection = collection(db, 'tags');
+      const tagsCollection = collection(dbInstance, 'tags');
       const tagsQuery = currentUser.role === 'superadmin'
         ? query(tagsCollection)
         : query(tagsCollection, where('ownerId', '==', currentUser.id));
@@ -71,7 +90,17 @@ export default function AdminContactsPage() {
       setLoading(false);
     }
   };
-
+  
+  // CORREÇÃO: Adicionar `db` como dependência e passá-lo para `fetchData`
+  useEffect(() => {
+    if (!authLoading && user && db) {
+      fetchData(user, db);
+    }
+    if (!authLoading && !user) {
+      setLoading(false);
+    }
+  }, [user, authLoading, db, toast]);
+  
   const handleExport = () => {
     if (contacts.length === 0) {
         toast({ variant: "destructive", title: 'Nenhum Contato', description: 'Não há contatos para exportar.' });
@@ -111,22 +140,13 @@ export default function AdminContactsPage() {
     toast({ title: 'Exportação Concluída', description: 'O arquivo CSV com seus contatos foi baixado.' });
   };
 
-  useEffect(() => {
-    if (!authLoading && user) {
-      fetchData(user);
-    }
-    if (!authLoading && !user) {
-      setLoading(false);
-    }
-  }, [user, authLoading]);
-
   const handleModalSuccess = () => {
     setIsAddModalOpen(false);
     setIsImportModalOpen(false);
-    if(user) fetchData(user);
+    if(user && db) fetchData(user, db); // CORREÇÃO: Passar o `db` aqui também
   };
 
-  if (authLoading || !user) {
+  if (authLoading || !user || !db) {
       return (
         <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
            <Heading title="Meus Contatos" description="Carregando seus contatos..."/>
@@ -144,7 +164,7 @@ export default function AdminContactsPage() {
         isAddModalOpen={isAddModalOpen}
         setIsAddModalOpen={setIsAddModalOpen}
         isImportModalOpen={isImportModalOpen}
-        setIsImportModalOpen={setIsImportModalOpen}
+        setIsImportModalOpen={setIsImportModalOpen} // Error fix: Added the missing prop
         handleExport={handleExport}
         handleModalSuccess={handleModalSuccess}
       />

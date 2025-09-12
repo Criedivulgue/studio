@@ -61,6 +61,16 @@ export interface Contact {
   avatar?: string;
 }
 
+export interface NewContactPayload {
+  name: string;
+  phone: string;
+  ownerId: string;
+  createdAt: any; // serverTimestamp()
+  updatedAt: any; // serverTimestamp()
+  groupId?: string[];
+  interestIds?: string[];
+}
+
 // =================================================================================
 // UNIFIED CHAT & CONVERSATION TYPES
 // =================================================================================

@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, onSnapshot, query, where } from 'firebase/firestore'; // Importando o 'where'
-import { db } from '@/lib/firebase';
+// CORREÇÃO: Remover import antigo do DB e adicionar os novos
+import { collection, onSnapshot, query, where, Firestore } from 'firebase/firestore';
+import { ensureFirebaseInitialized, getFirebaseInstances } from '@/lib/firebase';
+import { useToast } from '@/hooks/use-toast';
 
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
@@ -16,9 +18,28 @@ const AdminDataTable = createDataTable<PlatformUser, any>();
 export default function SuperAdminAdminsPage() {
   const [admins, setAdmins] = useState<PlatformUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [db, setDb] = useState<Firestore | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
-    // Query otimizada para buscar apenas usuários com a role 'admin'
+    const initFirebase = async () => {
+      try {
+        await ensureFirebaseInitialized();
+        const { db: firestoreDb } = getFirebaseInstances();
+        setDb(firestoreDb);
+      } catch (error) {
+        console.error("Firebase init error:", error);
+        toast({ variant: 'destructive', title: 'Erro de Inicialização', description: 'Não foi possível conectar ao banco de dados.' });
+        setLoading(false);
+      }
+    };
+    initFirebase();
+  }, [toast]);
+
+  useEffect(() => {
+    if (!db) return;
+
+    setLoading(true);
     const q = query(collection(db, 'users'), where('role', '==', 'admin'));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -31,32 +52,42 @@ export default function SuperAdminAdminsPage() {
       setLoading(false);
     }, (error) => {
       console.error("Erro ao buscar administradores: ", error);
+      toast({ variant: 'destructive', title: 'Erro ao Carregar', description: 'Não foi possível buscar os administradores.' });
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [db, toast]);
 
-  return (
-    <div className="space-y-4">
-      <Heading 
-        title={`Lojistas Administradores (${loading ? '...' : admins.length})`}
-        description="Gerencie os usuários com permissão de administrador das lojas."
-      />
-      <Separator />
-      {loading ? (
+  if (loading || !db) {
+    return (
+      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+        <Heading 
+          title={`Lojistas Administradores (...)`}
+          description="Gerencie os usuários com permissão de administrador das lojas."
+        />
+        <Separator />
         <div className="flex justify-center items-center h-64">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
-      ) : (
-        <AdminDataTable
-          columns={columns}
-          data={admins}
-          searchKey="name"
-          placeholder="Filtrar por nome..."
-          emptyMessage="Nenhum lojista administrador encontrado."
-        />
-      )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+      <Heading 
+        title={`Lojistas Administradores (${admins.length})`}
+        description="Gerencie os usuários com permissão de administrador das lojas."
+      />
+      <Separator />
+      <AdminDataTable
+        columns={columns}
+        data={admins}
+        searchKey="name"
+        placeholder="Filtrar por nome..."
+        emptyMessage="Nenhum lojista administrador encontrado."
+      />
     </div>
   );
 }

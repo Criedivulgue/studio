@@ -4,17 +4,15 @@ import * as React from 'react';
 import { X } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
-// CORREÇÃO: Importando Command diretamente de cmdk
 import { Command, CommandGroup, CommandItem, CommandInput, CommandList } from 'cmdk';
 
-// Definição do tipo para as opções do seletor
-type Option = Record<'value' | 'label', string>;
+export type MultiSelectOption = Record<'value' | 'label', string>;
 
 interface MultiSelectProps {
   placeholder?: string;
   className?: string;
   disabled?: boolean;
-  options: Option[];
+  options: MultiSelectOption[];
   selected: string[];
   onChange: React.Dispatch<React.SetStateAction<string[]>>;
 }
@@ -67,7 +65,7 @@ export function MultiSelect({
                       handleUnselect(value);
                     }
                   }}
-                  onMouseDown={(e: React.MouseEvent<HTMLButtonElement>) => { // <-- CORREÇÃO: Tipagem do evento
+                  onMouseDown={(e: React.MouseEvent<HTMLButtonElement>) => {
                     e.preventDefault();
                     e.stopPropagation();
                   }}
@@ -99,7 +97,7 @@ export function MultiSelect({
                 {selectables.map(option => (
                   <CommandItem
                     key={option.value}
-                    onMouseDown={(e: React.MouseEvent<HTMLDivElement>) => { // <-- CORREÇÃO: Tipagem do evento
+                    onMouseDown={(e: React.MouseEvent<HTMLDivElement>) => {
                       e.preventDefault();
                       e.stopPropagation();
                     }}

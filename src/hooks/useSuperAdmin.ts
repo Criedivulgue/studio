@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { getFirebaseInstances } from '../lib/firebase';
 import { useAuth } from './use-auth';
 import type { PlatformUser, Contact } from '@/lib/types'; // Importando os tipos
 
@@ -35,6 +35,7 @@ export const useSuperAdmin = () => {
       setLoading(true);
       setError(null);
 
+      const { db } = getFirebaseInstances();
       // Otimizando as queries para pegar totais e recentes de forma eficiente
       const usersCollection = collection(db, 'users');
       const contactsCollection = collection(db, 'contacts');

@@ -11,7 +11,8 @@ import { Logo } from "@/components/logo";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { signIn, signUp, getUserProfile } from "@/services/authService";
+// CORREÇÃO: Importar 'login' e 'register' e remover as funções antigas.
+import { login, register } from "@/services/authService";
 import { PlatformUser } from "@/lib/types";
 
 const handleAuthError = (error: any, toast: any) => {
@@ -68,40 +69,35 @@ export default function LoginPage() {
     window.location.href = targetUrl;
   }
 
+  // CORREÇÃO: Simplificar handleLogin para usar a nova função 'login'
   const handleLogin = async () => {
     setIsSubmitting(true);
     try {
-      const firebaseUser = await signIn(email, password);
-      if (firebaseUser) {
-        const userProfile = await getUserProfile(firebaseUser.uid);
-        if (userProfile) {
-          redirectToDashboard(userProfile);
-        } else {
-          throw new Error("Perfil de usuário não encontrado.");
-        }
-      }
+      const userProfile = await login(email, password);
+      redirectToDashboard(userProfile);
     } catch (error) {
       handleAuthError(error, toast);
-      setIsSubmitting(false); // Manter o formulário ativo em caso de erro
+      setIsSubmitting(false);
     }
   };
 
+  // CORREÇÃO: Ajustar handleSignUp para usar a nova função 'register'
   const handleSignUp = async () => {
     setIsSubmitting(true);
     try {
       const name = email.split('@')[0] || 'Novo Usuário';
-      const newUser = await signUp(email, password, name);
-      
+      const newUser = await register(name, email, password);
+
       toast({
         title: `Cadastro realizado com sucesso!`,
         description: `Sua conta foi criada com a função de ${newUser.role}.`,
       });
 
       redirectToDashboard(newUser);
-      
+
     } catch (error) {
       handleAuthError(error, toast);
-      setIsSubmitting(false); // Manter o formulário ativo em caso de erro
+      setIsSubmitting(false);
     }
   };
 

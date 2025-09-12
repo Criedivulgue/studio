@@ -4,99 +4,99 @@ import {
   useState, useEffect, createContext, useContext, ReactNode, useMemo, useCallback
 } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { onAuthStateChanged, User as AuthUser } from 'firebase/auth';
+import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, onSnapshot, getDoc } from 'firebase/firestore';
 import { ref, onValue, set, onDisconnect, serverTimestamp } from "firebase/database";
-import { auth, db, rtdb } from '@/lib/firebase';
-import { logout } from '@/services/authService';
+
+import { ensureFirebaseInitialized, getFirebaseInstances } from '@/lib/firebase';
+import { logout as logoutService } from '@/services/authService';
 import { useToast } from "@/hooks/use-toast";
 import type { PlatformUser } from '@/lib/types';
+
+interface FirebaseServices {
+  db: any;
+  auth: any;
+  rtdb: any;
+}
 
 interface AuthContextType {
   user: PlatformUser | null;
   loading: boolean;
   isSuperAdmin: boolean;
   signOut: () => void;
+  isLoggingOut: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-interface AuthProviderProps {
-  children: ReactNode;
-}
-
-export function AuthProvider({ children }: AuthProviderProps) {
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [firebase, setFirebase] = useState<FirebaseServices | null>(null);
   const [user, setUser] = useState<PlatformUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
   const router = useRouter();
   const pathname = usePathname();
   const { toast } = useToast();
 
   useEffect(() => {
+    const initFirebase = async () => {
+      try {
+        await ensureFirebaseInitialized();
+        setFirebase(getFirebaseInstances());
+      } catch (err) {
+        console.error("Falha crítica na inicialização do Firebase no AuthProvider:", err);
+        setLoading(false);
+      }
+    };
+    initFirebase();
+  }, []);
+
+  useEffect(() => {
+    if (!firebase) return;
+    // CORREÇÃO: Destruturação das instâncias do Firebase
+    const { auth, db } = firebase;
+
+    const handleUserChange = (firestoreData: any, firebaseUser: FirebaseUser) => {
+      setUser({
+        id: firebaseUser.uid, email: firebaseUser.email ?? '', name: firestoreData.name,
+        role: firestoreData.role, status: firestoreData.status, whatsapp: firestoreData.whatsapp,
+        createdAt: firestoreData.createdAt,
+      });
+      setLoading(false);
+    };
+
+    const handleNoUser = () => {
+      setUser(null);
+      setLoading(false);
+    };
+
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      // [CORREÇÃO DA CAUSA RAIZ]
-      // Se o usuário for anônimo, o AuthProvider simplesmente o ignora.
-      // Ele não limpa o estado nem interfere, permitindo que a PublicChatView gerencie a sessão.
       if (firebaseUser && !firebaseUser.isAnonymous) {
         const userDocRef = doc(db, "users", firebaseUser.uid);
         const unsubscribeSnapshot = onSnapshot(userDocRef, (userDoc) => {
           if (userDoc.exists()) {
-            const firestoreData = userDoc.data();
-            setUser({
-              id: firebaseUser.uid,
-              email: firebaseUser.email ?? '',
-              name: firestoreData.name,
-              role: firestoreData.role,
-              status: firestoreData.status,
-              whatsapp: firestoreData.whatsapp,
-              createdAt: firestoreData.createdAt,
-            });
+            handleUserChange(userDoc.data(), firebaseUser);
           } else {
-            // Se o usuário autenticado não existe no Firestore (ex: excluído), deslogue-o.
-            setUser(null);
-            logout(); 
+            logoutService().finally(handleNoUser);
           }
-          setLoading(false);
         }, (error) => {
-          console.error("Auth Hook: Erro ao buscar dados do usuário.", error);
-          setUser(null);
-          setLoading(false);
+          console.error("Auth Hook: Erro ao observar dados do utilizador.", error);
+          logoutService().finally(handleNoUser);
         });
         return () => unsubscribeSnapshot();
       } else {
-        // Se não houver usuário logado (ou for anônimo), o estado do admin é nulo.
-        setUser(null);
-        setLoading(false);
+        handleNoUser();
       }
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [firebase]); // A dependência de `firebase` está correta
 
-  // Efeito para gerenciar a presença online (padrão Firebase)
-  useEffect(() => {
-    if (!user) return;
-
-    const userStatusDatabaseRef = ref(rtdb, '/status/' + user.id);
-    const connectedRef = ref(rtdb, '.info/connected');
-
-    const listener = onValue(connectedRef, (snap) => {
-      if (snap.val() !== true) return;
-      
-      set(userStatusDatabaseRef, { isOnline: true, last_changed: serverTimestamp() });
-      onDisconnect(userStatusDatabaseRef).set({ isOnline: false, last_changed: serverTimestamp() });
-    });
-
-    return () => {
-      if (user?.id) {
-        const userStatusOnDisconnectRef = ref(rtdb, '/status/' + user.id);
-        onDisconnect(userStatusOnDisconnectRef).cancel();
-      }
-    };
-  }, [user]);
-
+  // REINTRODUZIDO: Lógica de verificação e redirecionamento de perfil
   const checkAndRedirect = useCallback(async () => {
-    if (loading || !user) return;
+    if (loading || !user || !firebase) return;
+    const { db } = firebase;
     const isPrivilegedUser = user.role === 'admin' || user.role === 'superadmin';
     if (!isPrivilegedUser || pathname.startsWith('/login') || pathname.startsWith('/register')) return;
 
@@ -113,30 +113,53 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } catch (error) {
       console.error("Erro ao verificar perfil público:", error);
     }
-  }, [user, loading, pathname, router, toast]);
+  }, [user, loading, pathname, router, toast, firebase]);
 
   useEffect(() => {
     checkAndRedirect();
   }, [checkAndRedirect]);
 
   const handleSignOut = useCallback(async () => {
-    await logout();
-    setUser(null);
-    router.push('/login');
-  }, [router]);
+    if (!firebase) return;
+    setIsLoggingOut(true);
+    try {
+      await logoutService();
+      router.push('/login');
+    } catch (error) {
+      console.error("Erro durante o logout:", error);
+      toast({ title: "Erro", description: "Não foi possível fazer logout.", variant: "destructive" });
+    } finally {
+      setIsLoggingOut(false);
+    }
+  }, [firebase, router, toast]);
+
+  // Gestão de presença (online/offline)
+  useEffect(() => {
+    if (!user || !firebase) return;
+    const { rtdb } = firebase;
+    const userStatusDatabaseRef = ref(rtdb, '/status/' + user.id);
+    onValue(ref(rtdb, '.info/connected'), (snap) => {
+      if (snap.val() === true) {
+        set(userStatusDatabaseRef, { isOnline: true, last_changed: serverTimestamp() });
+        onDisconnect(userStatusDatabaseRef).set({ isOnline: false, last_changed: serverTimestamp() });
+      }
+    });
+    return () => {
+      if (user?.id) {
+        onDisconnect(ref(rtdb, '/status/' + user.id)).cancel();
+      }
+    };
+  }, [user, firebase]);
 
   const value = useMemo(() => ({
     user,
-    loading,
+    loading: loading || isLoggingOut,
     isSuperAdmin: user?.role === 'superadmin',
     signOut: handleSignOut,
-  }), [user, loading, handleSignOut]);
+    isLoggingOut,
+  }), [user, loading, isLoggingOut, handleSignOut]);
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

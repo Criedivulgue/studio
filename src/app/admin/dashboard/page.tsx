@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+// CORREÇÃO: Remover import antigo do DB e adicionar os novos
+import { collection, query, where, getDocs, Firestore } from 'firebase/firestore';
+import { ensureFirebaseInitialized, getFirebaseInstances } from '@/lib/firebase';
 import { useAuth } from '@/hooks/use-auth';
+import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Heading } from "@/components/ui/heading";
 import { BookUser, Users, MessageSquareText, Loader2 } from 'lucide-react';
@@ -11,55 +13,61 @@ import { Separator } from '@/components/ui/separator';
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth(); 
-  const [stats, setStats] = useState({
-    contacts: 0,
-    groups: 0,
-    chats: 0,
-  });
+  const [stats, setStats] = useState({ contacts: 0, groups: 0, chats: 0 });
   const [dataLoading, setDataLoading] = useState(true);
+  // CORREÇÃO: Adicionar estado para o DB e toast
+  const [db, setDb] = useState<Firestore | null>(null);
+  const { toast } = useToast();
 
+  // CORREÇÃO: Efeito para inicializar o Firebase
   useEffect(() => {
-    if (!authLoading && user?.id) {
-      const fetchData = async () => {
-        setDataLoading(true);
-        try {
-          // Consulta para Contatos do usuário logado
-          const contactsQuery = query(collection(db, 'contacts'), where('ownerId', '==', user.id));
-          const contactsSnap = await getDocs(contactsQuery);
-          
-          // Consulta para Grupos/Tags do usuário logado
-          const groupsQuery = query(collection(db, 'tags'), where('ownerId', '==', user.id));
-          const groupsSnap = await getDocs(groupsQuery);
+    const initFirebase = async () => {
+      try {
+        await ensureFirebaseInitialized();
+        const { db: firestoreDb } = getFirebaseInstances();
+        setDb(firestoreDb);
+      } catch (error) {
+        console.error("Firebase init error:", error);
+        toast({ variant: 'destructive', title: 'Erro de Inicialização', description: 'Não foi possível conectar aos serviços.' });
+        setDataLoading(false);
+      }
+    };
+    initFirebase();
+  }, [toast]);
 
-          // Consulta para Conversas do usuário logado
-          const chatsQuery = query(collection(db, 'conversations'), where('adminId', '==', user.id));
-          const chatsSnap = await getDocs(chatsQuery);
-
-          setStats({
-            contacts: contactsSnap.size,
-            groups: groupsSnap.size,
-            chats: chatsSnap.size,
-          });
-        } catch (error) {
-          console.error("Error fetching dashboard data: ", error);
-        } finally {
-          setDataLoading(false);
-        }
-      };
-
-      fetchData();
-    } else if (!authLoading) {
-      setDataLoading(false);
+  // CORREÇÃO: Efeito para buscar dados, agora dependente do DB
+  useEffect(() => {
+    if (authLoading || !user?.id || !db) {
+      if (!authLoading) setDataLoading(false);
+      return;
     }
-  }, [user, authLoading]);
 
-  if (authLoading) {
-      return (
-          <div className="flex items-center justify-center h-full">
-              <Loader2 className="h-8 w-8 animate-spin" />
-          </div>
-      )
-  }
+    const fetchData = async () => {
+      setDataLoading(true);
+      try {
+        const contactsQuery = query(collection(db, 'contacts'), where('ownerId', '==', user.id));
+        const groupsQuery = query(collection(db, 'tags'), where('ownerId', '==', user.id));
+        const chatsQuery = query(collection(db, 'conversations'), where('adminId', '==', user.id));
+        
+        const [contactsSnap, groupsSnap, chatsSnap] = await Promise.all([
+            getDocs(contactsQuery),
+            getDocs(groupsQuery),
+            getDocs(chatsQuery)
+        ]);
+
+        setStats({ contacts: contactsSnap.size, groups: groupsSnap.size, chats: chatsSnap.size });
+      } catch (error) {
+        console.error("Error fetching dashboard data: ", error);
+        toast({ variant: 'destructive', title: 'Erro ao Carregar Dados', description: 'Não foi possível buscar as estatísticas.' });
+      } finally {
+        setDataLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [user, authLoading, db, toast]);
+
+  const isLoading = authLoading || dataLoading;
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -68,30 +76,22 @@ export default function DashboardPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Contatos
-            </CardTitle>
+            <CardTitle className="text-sm font-medium">Contatos</CardTitle>
             <BookUser className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{dataLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : stats.contacts}</div>
-            <p className="text-xs text-muted-foreground">
-              Total de contatos cadastrados
-            </p>
+            <div className="text-2xl font-bold">{isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : stats.contacts}</div>
+            <p className="text-xs text-muted-foreground">Total de contatos cadastrados</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Grupos
-            </CardTitle>
+            <CardTitle className="text-sm font-medium">Grupos</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{dataLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : stats.groups}</div>
-            <p className="text-xs text-muted-foreground">
-              Total de grupos e interesses
-            </p>
+            <div className="text-2xl font-bold">{isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : stats.groups}</div>
+            <p className="text-xs text-muted-foreground">Total de grupos e interesses</p>
           </CardContent>
         </Card>
         <Card>
@@ -100,10 +100,8 @@ export default function DashboardPage() {
             <MessageSquareText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{dataLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : stats.chats}</div>
-            <p className="text-xs text-muted-foreground">
-              Sessões de chat iniciadas
-            </p>
+            <div className="text-2xl font-bold">{isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : stats.chats}</div>
+            <p className="text-xs text-muted-foreground">Sessões de chat iniciadas</p>
           </CardContent>
         </Card>
       </div>

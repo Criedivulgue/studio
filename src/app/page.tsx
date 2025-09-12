@@ -2,16 +2,16 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { doc, getDoc } from 'firebase/firestore'; 
+import { doc, getDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { ArrowRight, Bot, Zap } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { useAuth } from '@/hooks/use-auth';
-import { db } from '@/lib/firebase';
+// CORREÇÃO: Removida a importação direta de 'db' e adicionadas as funções de inicialização.
+import { ensureFirebaseInitialized, getFirebaseInstances } from '@/lib/firebase';
 
 // A página inicial agora é apenas para marketing.
-// O roteador condicional foi removido.
 export default function Home() {
   const { user, loading: authLoading } = useAuth();
   const [superAdminLink, setSuperAdminLink] = useState('#');
@@ -21,13 +21,16 @@ export default function Home() {
     const fetchSuperAdminId = async () => {
       setLinkLoading(true);
       try {
+        // CORREÇÃO: Garante que o Firebase está inicializado e obtém a instância do DB.
+        await ensureFirebaseInitialized();
+        const { db } = getFirebaseInstances();
+
         const configDocRef = doc(db, "public_config", "global");
         const docSnap = await getDoc(configDocRef);
 
         if (docSnap.exists()) {
           const superAdminId = docSnap.data().superAdminId;
           if (superAdminId) {
-            // O link agora aponta para a nova rota de chat dedicada.
             setSuperAdminLink(`/chat/${superAdminId}`);
           } else {
             console.error("ERRO: O campo 'superAdminId' não foi encontrado no documento de configuração.");
@@ -53,7 +56,6 @@ export default function Home() {
     return user.role === 'superadmin' ? '/super-admin/dashboard' : '/admin/dashboard';
   };
 
-  // A lógica para desabilitar o botão de chat permanece a mesma.
   const isChatDisabled = authLoading || linkLoading || !!user || superAdminLink === '#';
 
   return (

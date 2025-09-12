@@ -15,6 +15,16 @@ service cloud.firestore {
              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'superadmin'];
     }
 
+    function isAuthenticatedUser() {
+      return request.auth != null;
+    }
+
+    function isSessionParticipant(sessionData) {
+      return request.auth != null && 
+             (request.auth.uid == sessionData.visitorUid || 
+              request.auth.uid == sessionData.adminId);
+    }
+
     match /users/{userId} {
       allow read, list: if isSuperAdmin();
       allow get, update: if request.auth.uid == userId;
@@ -62,20 +72,47 @@ service cloud.firestore {
       allow update, delete: if isAdmin() && resource.data.ownerId == request.auth.uid;
     }
 
+    // --- REGRAS CORRIGIDAS PARA CHAT SESSIONS ---
     match /chatSessions/{sessionId} {
-      // [PLANO FINAL] Simplificando a regra ao extremo para confirmar a causa.
-      allow create: if true;
+      // PERMITE CRIAÇÃO por qualquer usuário autenticado (incluindo anônimos)
+      // Verifica se o visitorUid é o mesmo do usuário autenticado
+      allow create: if isAuthenticatedUser() && 
+                     request.resource.data.visitorUid == request.auth.uid;
 
-      allow get: if request.auth.uid == resource.data.visitorUid || (isAdmin() && resource.data.adminId == request.auth.uid);
-      allow update, delete: if isAdmin() && resource.data.adminId == request.auth.uid;
+      // PERMITE LEITURA pelo visitante ou pelo admin da sessão
+      allow get: if isAuthenticatedUser() && 
+                  (request.auth.uid == resource.data.visitorUid || 
+                   request.auth.uid == resource.data.adminId);
+      
+      // PERMITE LISTAGEM apenas por administradores (não por anônimos)
       allow list: if isAdmin();
+      
+      // PERMITE ATUALIZAÇÃO apenas pelo admin da sessão
+      allow update, delete: if isAuthenticatedUser() && 
+                             request.auth.uid == resource.data.adminId;
 
+      // SUBColeção de mensagens
       match /messages/{messageId} {
-        allow create: if request.auth.uid == get(/databases/$(database)/documents/chatSessions/$(sessionId)).data.visitorUid || 
-                       (isAdmin() && get(/databases/$(database)/documents/chatSessions/$(sessionId)).data.adminId == request.auth.uid);
         
-        allow read, list: if request.auth.uid == get(/databases/$(database)/documents/chatSessions/$(sessionId)).data.visitorUid || 
-                           (isAdmin() && get(/databases/$(database)/documents/chatSessions/$(sessionId)).data.adminId == request.auth.uid);
+        // Função auxiliar para obter dados da sessão pai
+        function getSessionData() {
+          return get(/databases/$(database)/documents/chatSessions/$(sessionId)).data;
+        }
+        
+        // PERMITE CRIAÇÃO de mensagens pelo visitante ou pelo admin
+        allow create: if isAuthenticatedUser() && 
+                       (request.auth.uid == getSessionData().visitorUid ||
+                        request.auth.uid == getSessionData().adminId);
+        
+        // PERMITE LEITURA de mensagens pelo visitante ou pelo admin
+        allow read: if isAuthenticatedUser() && 
+                     (request.auth.uid == getSessionData().visitorUid ||
+                      request.auth.uid == getSessionData().adminId);
+        
+        // PERMITE LISTAGEM de mensagens pelo visitante ou pelo admin
+        allow list: if isAuthenticatedUser() && 
+                     (request.auth.uid == getSessionData().visitorUid ||
+                      request.auth.uid == getSessionData().adminId);
       }
     }
 

@@ -4,10 +4,10 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-// CORREÇÃO: Importar o writeBatch para operações atômicas
-import { doc, getDoc, updateDoc, setDoc, writeBatch } from 'firebase/firestore';
+import { Firestore, doc, getDoc, updateDoc, setDoc, writeBatch } from 'firebase/firestore';
+import { FirebaseStorage } from 'firebase/storage';
 import { getAuth } from 'firebase/auth';
-import { db, storage } from '@/lib/firebase';
+import { ensureFirebaseInitialized, getFirebaseInstances } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 
 import { Button } from '@/components/ui/button';
@@ -27,81 +27,71 @@ type ProfileFormValues = z.infer<typeof profileFormSchema>;
 export function ProfileForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
+  const [db, setDb] = useState<Firestore | null>(null);
+  const [storage, setStorage] = useState<FirebaseStorage | undefined>(undefined);
   const { toast } = useToast();
   const auth = getAuth();
   const user = auth.currentUser;
 
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileFormSchema),
-    defaultValues: {
-      name: '',
-      avatarUrl: '',
-    },
+    defaultValues: { name: '', avatarUrl: '' },
   });
 
   useEffect(() => {
-    if (user) {
-      const fetchProfile = async () => {
-        setIsFetching(true);
-        try {
-          const userDocRef = doc(db, 'users', user.uid);
-          const userDocSnap = await getDoc(userDocRef);
-          if (userDocSnap.exists()) {
-            const userData = userDocSnap.data();
-            form.reset({ 
-              name: userData.name || '', 
-              avatarUrl: userData.avatarUrl || '' 
-            });
-          } else {
-            const initialProfile = { 
-                name: user.displayName || 'Super Administrador', 
-                email: user.email, 
-                avatarUrl: '' 
-            };
-            await setDoc(userDocRef, initialProfile);
-            form.reset(initialProfile);
-          }
-        } catch (error) {
-          console.error("Erro ao buscar/criar perfil:", error);
-          toast({ title: 'Erro', description: 'Não foi possível carregar seu perfil.', variant: 'destructive' });
+    const initializeAndFetch = async () => {
+      if (!user) {
+        setIsFetching(false);
+        return;
+      }
+      setIsFetching(true);
+      try {
+        await ensureFirebaseInitialized();
+        const { db: firestoreDb, storage: firebaseStorage } = getFirebaseInstances();
+        setDb(firestoreDb);
+        setStorage(firebaseStorage);
+
+        const userDocRef = doc(firestoreDb, 'users', user.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        if (userDocSnap.exists()) {
+          const userData = userDocSnap.data();
+          form.reset({ 
+            name: userData.name || '', 
+            avatarUrl: userData.avatarUrl || '' 
+          });
+        } else {
+          const initialProfile = { 
+              name: user.displayName || 'Super Administrador', 
+              email: user.email, 
+              avatarUrl: '' 
+          };
+          await setDoc(userDocRef, initialProfile);
+          form.reset(initialProfile);
         }
+      } catch (error) {
+        console.error("Erro ao carregar perfil:", error);
+        toast({ title: 'Erro', description: 'Não foi possível carregar seu perfil.', variant: 'destructive' });
+      } finally {
         setIsFetching(false);
-      };
-      fetchProfile();
-    } else {
-        setIsFetching(false);
-    }
+      }
+    };
+    initializeAndFetch();
   }, [user, form, toast]);
 
-  // CORREÇÃO: Função de salvar atualizada para sincronizar com o perfil público
   const onSubmit = async (data: ProfileFormValues) => {
-    if (!user) {
-        toast({ title: 'Erro de Autenticação', description: 'Você não está logado.', variant: 'destructive' });
+    if (!user || !db) {
+        toast({ title: 'Erro', description: 'Recurso indisponível ou usuário não autenticado.', variant: 'destructive' });
         return;
     }
 
     setIsLoading(true);
     try {
-      // 1. Criar um batch para garantir a atomicidade da operação
       const batch = writeBatch(db);
-
-      // 2. Referência para o documento PRIVADO do usuário
       const userDocRef = doc(db, 'users', user.uid);
-      batch.update(userDocRef, {
-        name: data.name,
-        avatarUrl: data.avatarUrl,
-      });
-
-      // 3. Referência para o documento PÚBLICO do usuário
+      batch.update(userDocRef, { name: data.name, avatarUrl: data.avatarUrl });
       const publicProfileRef = doc(db, 'public_profiles', user.uid);
-      batch.set(publicProfileRef, {
-        name: data.name,
-        avatarUrl: data.avatarUrl,
-      }, { merge: true }); // Usar merge para criar ou atualizar
-
-      // 4. Executar a operação atômica
+      batch.set(publicProfileRef, { name: data.name, avatarUrl: data.avatarUrl }, { merge: true });
       await batch.commit();
-
       toast({ title: 'Sucesso!', description: 'Seu perfil foi atualizado.' });
     } catch (error) {
       console.error("Erro ao atualizar perfil:", error);
@@ -131,6 +121,7 @@ export function ProfileForm() {
                         <FormLabel>Imagem de Perfil</FormLabel>
                         <FormControl>
                            <ImageUploader 
+                             storage={storage} 
                              storagePath={`avatars/${user?.uid}`}
                              initialImageUrl={field.value}
                              onUploadComplete={(url) => {
