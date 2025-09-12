@@ -1,37 +1,62 @@
+self.addEventListener('install', (event) => {
+  self.skipWaiting(); // Garante que o novo service worker ative imediatamente
+});
 
-// Scripts de importação para o Firebase Service Worker (sintaxe de compatibilidade)
-importScripts('https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/9.15.0/firebase-messaging-compat.js');
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim()); // Torna o service worker ativo o controlador da página imediatamente
+});
 
-// A configuração do Firebase que você já tinha.
-const firebaseConfig = {
-  apiKey: "AIzaSyB3qOq0uWY2DnmmN08A6L8Gn0_qYvfIatI",
-  authDomain: "omniflow-ai-mviw9.firebaseapp.com",
-  projectId: "omniflow-ai-mviw9",
-  storageBucket: "omniflow-ai-mviw9.firebasestorage.app",
-  messagingSenderId: "904294888593",
-  appId: "1:904294888593:web:2b8ad0686d59f65d07bb30"
+// Importa os scripts do Firebase
+importScripts('https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/9.6.1/firebase-messaging-compat.js');
+
+// Variável para guardar a configuração do Firebase
+let firebaseConfig = null;
+
+// Função para buscar a configuração do servidor
+const fetchFirebaseConfig = async () => {
+  try {
+    // O caminho é relativo à origem do site
+    const response = await fetch('/api/firebase-config');
+    if (!response.ok) {
+      throw new Error('Failed to fetch Firebase config');
+    }
+    firebaseConfig = await response.json();
+  } catch (error) {
+    console.error('Error fetching Firebase config:', error);
+    return null;
+  }
 };
 
-// Inicializa o Firebase usando a API de compatibilidade.
-firebase.initializeApp(firebaseConfig);
+// Função de inicialização do Firebase
+const initializeFirebase = async () => {
+  if (!firebaseConfig) {
+    await fetchFirebaseConfig();
+  }
 
-// Obtém a instância do Messaging para lidar com mensagens em segundo plano.
-const messaging = firebase.messaging();
+  if (firebaseConfig && firebase.apps.length === 0) {
+    console.log('Service Worker: Initializing Firebase with fetched config.');
+    firebase.initializeApp(firebaseConfig);
+    const messaging = firebase.messaging();
 
-messaging.onBackgroundMessage((payload) => {
-  console.log(
-    '[firebase-messaging-sw.js] Mensagem recebida em segundo plano: ',
-    payload
-  );
+    messaging.onBackgroundMessage((payload) => {
+      console.log(
+        '[firebase-messaging-sw.js] Received background message ',
+        payload
+      );
+      // TODO: Customize notification here
+      const notificationTitle = payload.notification.title || 'Nova Mensagem';
+      const notificationOptions = {
+        body: payload.notification.body || '',
+        icon: payload.notification.icon || '/firebase-logo.png',
+      };
 
-  // Extrai o título e as opções da notificação do payload.
-  const notificationTitle = payload.notification.title || 'Nova Mensagem';
-  const notificationOptions = {
-    body: payload.notification.body || 'Você tem uma nova mensagem.',
-    icon: '/favicon.ico' // Ícone padrão
-  };
+      self.registration.showNotification(notificationTitle, notificationOptions);
+    });
+  } else {
+    console.log('Service Worker: Firebase already initialized or config fetch failed.');
+  }
+};
 
-  // Mostra a notificação usando a API do Service Worker.
-  self.registration.showNotification(notificationTitle, notificationOptions);
-});
+// Inicializa o Firebase ao carregar o script
+initializeFirebase();

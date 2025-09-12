@@ -1,19 +1,23 @@
-
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler"); // Correção: Importar o agendador v2
 const admin = require("firebase-admin");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-// Initialize Firebase Admin and Gemini API
-admin.initializeApp();
+// Garante que o admin seja inicializado apenas uma vez.
+if (admin.apps.length === 0) {
+  admin.initializeApp();
+}
+
+// Inicializa APIs
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 const db = admin.firestore();
 
+// --- FUNÇÕES DE GATILHO (TRIGGERS) ---
+
 /**
- * [FIXED] Triggered when a new message is sent by a visitor.
- * This function includes a transactional lock to prevent race conditions,
- * ensuring that only one AI response is processed at a time for a given chat session.
+ * Disparado quando um novo visitante envia uma mensagem.
  */
 exports.onNewVisitorMessage = onDocumentCreated(
   {
@@ -32,7 +36,6 @@ exports.onNewVisitorMessage = onDocumentCreated(
     const sessionId = event.params.sessionId;
     const sessionRef = db.doc(`chatSessions/${sessionId}`);
 
-    // Only trigger for messages from the 'user' (visitor)
     if (newMessage.role !== 'user') {
       console.log(`Message ${event.params.messageId} is not from a visitor. No AI action needed.`);
       return;
@@ -41,36 +44,26 @@ exports.onNewVisitorMessage = onDocumentCreated(
     console.log(`New visitor message in session ${sessionId}. Attempting to acquire lock.`);
 
     try {
-      // Transactional lock to prevent race conditions
       await db.runTransaction(async (transaction) => {
         const sessionDoc = await transaction.get(sessionRef);
-
         if (!sessionDoc.exists) {
           throw new Error("Session document not found!");
         }
-
         if (sessionDoc.data().aiProcessing) {
-          console.log(`AI is already processing for session ${sessionId}. Aborting.`);
-          // By throwing an error, we abort the transaction and the function execution.
-          // We'll catch this specific error to exit gracefully.
           throw new Error("AI_PROCESSING_LOCKED");
         }
-        
-        // Acquire the lock
         transaction.update(sessionRef, { aiProcessing: true });
       });
-
     } catch (error) {
-        if (error.message === "AI_PROCESSING_LOCKED") {
-            return; // Exit gracefully if another process has the lock
-        }
-        console.error(`Error acquiring lock for session ${sessionId}:`, error);
-        return; // Exit if we fail to acquire the lock for other reasons
+      if (error.message === "AI_PROCESSING_LOCKED") {
+        console.log(`AI is already processing for session ${sessionId}. Aborting.`);
+        return;
+      }
+      console.error(`Error acquiring lock for session ${sessionId}:`, error);
+      return;
     }
 
-    // --- Lock Acquired ---
     console.log(`Lock acquired for session ${sessionId}. Initiating AI response.`);
-
     try {
       const adminUserDoc = await db.doc(`users/${newMessage.adminId}`).get();
       const personalPrompt = adminUserDoc.exists() && adminUserDoc.data().aiPrompt
@@ -82,20 +75,18 @@ exports.onNewVisitorMessage = onDocumentCreated(
 
       const history = messagesSnapshot.docs.map(doc => {
         const data = doc.data();
-        const role = data.role === 'user' ? 'user' : 'model';
         return {
-            role: role,
-            parts: [{ text: data.content }],
+          role: data.role === 'user' ? 'user' : 'model',
+          parts: [{ text: data.content }],
         };
       });
-      
-      history.pop(); // The last message is the new prompt, so remove it from history
+      history.pop();
 
       const chat = model.startChat({ history });
       const result = await chat.sendMessage(newMessage.content);
       const response = await result.response;
       const aiResponseText = response.text().trim();
-      
+
       const aiMessage = {
         content: aiResponseText,
         role: 'assistant',
@@ -104,47 +95,40 @@ exports.onNewVisitorMessage = onDocumentCreated(
         read: false,
       };
 
-      // Save the AI's response and update the session's last message
       const batch = db.batch();
       const newMsgRef = messagesRef.doc();
       batch.set(newMsgRef, aiMessage);
       batch.update(sessionRef, {
-          lastMessage: aiResponseText,
-          lastMessageTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+        lastMessage: aiResponseText,
+        lastMessageTimestamp: admin.firestore.FieldValue.serverTimestamp(),
       });
       await batch.commit();
-      
       console.log(`AI response for ${sessionId} saved successfully.`);
-
     } catch (error) {
       console.error(`Error processing AI response for session ${sessionId}:`, error);
     } finally {
-      // CRITICAL: Release the lock regardless of success or failure
       await sessionRef.update({ aiProcessing: false });
       console.log(`Lock released for session ${sessionId}.`);
     }
   }
 );
 
+// --- FUNÇÕES CHAMÁVEIS (CALLABLE) ---
 
 /**
- * FINAL: This function converts an anonymous ChatSession into a permanent, identified Conversation.
- * It creates a new Contact, a new Conversation, migrates all messages, and deletes the old session.
+ * Converte um Lead anônimo em um Contato e Conversa permanentes.
  */
 exports.identifyLead = onCall({ region: "southamerica-east1" }, async (request) => {
   if (!request.auth) {
-    throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
+    throw new HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
   }
-
   const { sessionId, adminId, contactData } = request.data;
   const callingAdminId = request.auth.uid;
-  
   if (callingAdminId !== adminId) {
-      throw new HttpsError('permission-denied', 'You are not authorized to perform this action.');
+    throw new HttpsError('permission-denied', 'Você não tem autorização para realizar esta ação.');
   }
-
   if (!sessionId || !contactData || !contactData.name || !contactData.email) {
-    throw new HttpsError('invalid-argument', 'Missing required data: sessionId and contactData (name, email).');
+    throw new HttpsError('invalid-argument', 'Faltam dados obrigatórios: sessionId e contactData (name, email).');
   }
 
   const sessionRef = db.doc(`chatSessions/${sessionId}`);
@@ -152,160 +136,189 @@ exports.identifyLead = onCall({ region: "southamerica-east1" }, async (request) 
   const newConversationRef = db.collection('conversations').doc();
 
   try {
-    // Step 1: Run a transaction to create the core Contact and Conversation atomically.
     await db.runTransaction(async (transaction) => {
-        const sessionDoc = await transaction.get(sessionRef);
-        if (!sessionDoc.exists) {
-            throw new HttpsError('not-found', `Session with ID ${sessionId} not found.`);
-        }
-        const sessionData = sessionDoc.data();
-
-        // Create the new Contact
-        transaction.set(newContactRef, {
-          id: newContactRef.id,
-          ownerId: adminId,
-          name: contactData.name,
-          email: contactData.email,
-          status: 'active',
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          lastInteraction: sessionData.lastMessageTimestamp || admin.firestore.FieldValue.serverTimestamp(),
-        });
-
-        // Create the new Conversation, denormalizing the contact name
-        transaction.set(newConversationRef, {
-          id: newConversationRef.id,
-          adminId: adminId,
-          contactId: newContactRef.id,
-          status: 'active',
-          createdAt: sessionData.createdAt,
-          lastMessage: sessionData.lastMessage || '',
-          lastMessageTimestamp: sessionData.lastMessageTimestamp,
-          unreadCount: 0, 
-          contactName: contactData.name,
-          contactAvatar: contactData.avatar || '',
-        });
+      const sessionDoc = await transaction.get(sessionRef);
+      if (!sessionDoc.exists) {
+        throw new HttpsError('not-found', `Sessão com ID ${sessionId} não encontrada.`);
+      }
+      const sessionData = sessionDoc.data();
+      transaction.set(newContactRef, {
+        id: newContactRef.id,
+        ownerId: adminId,
+        name: contactData.name,
+        email: contactData.email,
+        status: 'active',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastInteraction: sessionData.lastMessageTimestamp || admin.firestore.FieldValue.serverTimestamp(),
+      });
+      transaction.set(newConversationRef, {
+        id: newConversationRef.id,
+        adminId: adminId,
+        contactId: newContactRef.id,
+        status: 'active',
+        createdAt: sessionData.createdAt,
+        lastMessage: sessionData.lastMessage || '',
+        lastMessageTimestamp: sessionData.lastMessageTimestamp,
+        unreadCount: 0,
+        contactName: contactData.name,
+        contactAvatar: contactData.avatar || '',
+      });
     });
 
-    console.log(`Transaction successful. Contact ${newContactRef.id} and Conversation ${newConversationRef.id} created.`);
-
-    // Step 2: Use a batch write to migrate messages and delete the old session.
+    console.log(`Transação bem-sucedida. Contato ${newContactRef.id} e Conversa ${newConversationRef.id} criados.`);
     const messagesRef = sessionRef.collection('messages');
     const messagesSnapshot = await messagesRef.get();
     const writeBatch = db.batch();
-
     if (!messagesSnapshot.empty) {
-        console.log(`Migrating ${messagesSnapshot.size} messages...`);
-        messagesSnapshot.docs.forEach(msgDoc => {
-            const newMsgRef = newConversationRef.collection('messages').doc(msgDoc.id);
-            writeBatch.set(newMsgRef, msgDoc.data());
-            writeBatch.delete(msgDoc.ref);
-        });
+      console.log(`Migrando ${messagesSnapshot.size} mensagens...`);
+      messagesSnapshot.docs.forEach(msgDoc => {
+        const newMsgRef = newConversationRef.collection('messages').doc(msgDoc.id);
+        writeBatch.set(newMsgRef, msgDoc.data());
+        writeBatch.delete(msgDoc.ref);
+      });
     }
-
-    // Delete the original session document
     writeBatch.delete(sessionRef);
     await writeBatch.commit();
-
-    console.log(`Successfully migrated chat and deleted session ${sessionId}.`);
+    console.log(`Chat migrado e sessão ${sessionId} apagada com sucesso.`);
     return { status: 'success', conversationId: newConversationRef.id };
-
   } catch (error) {
-    console.error(`Error in identifyLead for session ${sessionId}:`, error);
+    console.error(`Erro em identifyLead para a sessão ${sessionId}:`, error);
     if (error instanceof HttpsError) throw error;
-    throw new HttpsError('internal', 'An error occurred while migrating the chat.');
+    throw new HttpsError('internal', 'Ocorreu um erro ao migrar o chat.');
   }
 });
 
 /**
- * [NEW] Archives a conversation and generates an AI summary.
- * This is a callable function invoked by an admin from the chat interface.
+ * Arquiva uma conversa e gera um resumo com IA.
  */
 exports.archiveAndSummarizeConversation = onCall(
   { region: "southamerica-east1", secrets: ["GEMINI_API_KEY"] },
   async (request) => {
     if (!request.auth) {
-      throw new HttpsError(
-        "unauthenticated",
-        "The function must be called while authenticated."
-      );
+      throw new HttpsError("unauthenticated", "A função deve ser chamada por um usuário autenticado.");
     }
-
     const { conversationId, contactId } = request.data;
     const adminId = request.auth.uid;
-
     if (!conversationId || !contactId) {
-      throw new HttpsError(
-        "invalid-argument",
-        "Missing required data: conversationId and contactId."
-      );
+      throw new HttpsError("invalid-argument", "Faltam dados obrigatórios: conversationId e contactId.");
     }
-    
-    console.log(`Starting archive for conversation ${conversationId} by admin ${adminId}`);
-
+    console.log(`Iniciando arquivamento para a conversa ${conversationId} pelo admin ${adminId}`);
     const convoRef = db.doc(`conversations/${conversationId}`);
     const contactRef = db.doc(`contacts/${contactId}`);
     const messagesRef = convoRef.collection("messages");
-
     try {
       const convoDoc = await convoRef.get();
       if (!convoDoc.exists) {
-        throw new HttpsError("not-found", `Conversation ${conversationId} not found.`);
+        throw new HttpsError("not-found", `Conversa ${conversationId} não encontrada.`);
       }
       if (convoDoc.data().adminId !== adminId) {
-          throw new HttpsError("permission-denied", "You are not the owner of this conversation.");
+        throw new HttpsError("permission-denied", "Você não é o proprietário desta conversa.");
       }
-
       const messagesSnapshot = await messagesRef.orderBy("timestamp", "asc").get();
       if (messagesSnapshot.empty) {
-        console.log("No messages to summarize. Archiving directly.");
-        
+        console.log("Nenhuma mensagem para resumir. Arquivando diretamente.");
         await convoRef.update({
           status: "archived",
           archivedAt: admin.firestore.FieldValue.serverTimestamp(),
-          summary: "No messages in this conversation.",
+          summary: "Nenhuma mensagem nesta conversa.",
         });
-
-        return { status: "success", summary: "No messages in this conversation." };
+        return { status: "success", summary: "Nenhuma mensagem nesta conversa." };
       }
-
-      const history = messagesSnapshot.docs
-        .map((doc) => {
-          const msg = doc.data();
-          const role = msg.role === "admin" ? "ADMIN" : "CLIENT";
-          return `${role}: ${msg.content}`;
-        })
-        .join("\n");
-      
-      const prompt = `Please summarize the following conversation between a support agent (ADMIN) and a customer (CLIENT). The summary should be concise, in portuguese, max 2 sentences, and capture the main reason for the contact and the resolution. CONVERSATION:\n\n${history}`;
-
+      const history = messagesSnapshot.docs.map((doc) => {
+        const msg = doc.data();
+        const role = msg.role === "admin" ? "ADMIN" : "CLIENTE";
+        return `${role}: ${msg.content}`;
+      }).join("\n");
+      const prompt = `Por favor, resuma a seguinte conversa entre um agente de suporte (ADMIN) e um cliente (CLIENTE). O resumo deve ser conciso, em português, com no máximo 2 frases, e capturar o motivo principal do contato e a resolução. CONVERSAÇÃO:\n\n${history}`;
       const result = await model.generateContent(prompt);
       const response = await result.response;
       const summaryText = response.text().trim();
-      
       const batch = db.batch();
-
       batch.update(convoRef, {
         status: "archived",
         summary: summaryText,
         archivedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      
       batch.update(contactRef, {
         lastInteraction: admin.firestore.FieldValue.serverTimestamp(),
       });
-
       await batch.commit();
-      
-      console.log(`Successfully archived and summarized conversation ${conversationId}.`);
+      console.log(`Conversa ${conversationId} arquivada e resumida com sucesso.`);
       return { status: "success", summary: summaryText };
-
     } catch (error) {
-      console.error(
-        `Error archiving conversation ${conversationId}:`,
-        error
-      );
+      console.error(`Erro ao arquivar a conversa ${conversationId}:`, error);
       if (error instanceof HttpsError) throw error;
-      throw new HttpsError("internal", "An unexpected error occurred while archiving the conversation.");
+      throw new HttpsError("internal", "Ocorreu um erro inesperado ao arquivar a conversa.");
     }
   }
 );
+
+// --- FUNÇÕES AGENDADAS (SCHEDULED) ---
+
+/**
+ * Correção: Função de limpeza reescrita com a sintaxe v2 `onSchedule`.
+ */
+exports.cleanupOldChatSessions = onSchedule(
+  {
+    schedule: "every 24 hours",
+    region: "southamerica-east1",
+  },
+  async (event) => {
+    console.log("Iniciando a limpeza diária de sessões de chat antigas.");
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const thirtyDaysAgoTimestamp = admin.firestore.Timestamp.fromDate(thirtyDaysAgo);
+
+    const oldSessionsQuery = db.collection("chatSessions").where("lastMessageTimestamp", "<", thirtyDaysAgoTimestamp);
+
+    try {
+      const snapshot = await oldSessionsQuery.get();
+      if (snapshot.empty) {
+        console.log("Nenhuma sessão de chat antiga para apagar.");
+        return null;
+      }
+
+      console.log(`Encontradas ${snapshot.size} sessões de chat antigas para apagar.`);
+      const promises = snapshot.docs.map(doc => {
+        console.log(`Agendando exclusão da sessão ${doc.id} e suas mensagens.`);
+        // Apaga a subcoleção de mensagens e depois o documento principal.
+        return deleteCollection(doc.ref.collection("messages"), 100).then(() => doc.ref.delete());
+      });
+
+      await Promise.all(promises);
+      console.log("Limpeza de sessões de chat antigas concluída com sucesso.");
+      return { status: "success", deletedCount: snapshot.size };
+
+    } catch (error) {
+      console.error("Erro durante a limpeza das sessões de chat:", error);
+      // Para funções agendadas, lançar um erro é suficiente para indicar falha.
+      throw new Error("Falha ao limpar sessões antigas.");
+    }
+  }
+);
+
+// --- FUNÇÕES AUXILIARES (HELPERS) ---
+
+async function deleteCollection(collectionRef, batchSize) {
+  const query = collectionRef.orderBy("__name__").limit(batchSize);
+  return new Promise((resolve, reject) => {
+    deleteQueryBatch(query, resolve).catch(reject);
+  });
+}
+
+async function deleteQueryBatch(query, resolve) {
+  const snapshot = await query.get();
+  if (snapshot.size === 0) {
+    return resolve();
+  }
+
+  const batch = db.batch();
+  snapshot.docs.forEach((doc) => {
+    batch.delete(doc.ref);
+  });
+  await batch.commit();
+
+  process.nextTick(() => {
+    deleteQueryBatch(query, resolve);
+  });
+}
