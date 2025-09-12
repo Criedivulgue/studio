@@ -13,7 +13,6 @@ import { useAuth } from '@/hooks/use-auth';
 import { db } from '@/lib/firebase';
 import { PublicChatView } from '@/components/chat/PublicChatView';
 
-// --- Sub-componente para a página de Marketing ---
 function MarketingContent() {
   const { user, loading: authLoading } = useAuth();
   const [superAdminLink, setSuperAdminLink] = useState('#');
@@ -21,25 +20,31 @@ function MarketingContent() {
 
   useEffect(() => {
     const fetchSuperAdminId = async () => {
+      console.log("Iniciando busca pela configuração pública...");
       setLinkLoading(true);
       try {
         const configDocRef = doc(db, "public_config", "global");
+        console.log("Referência do documento criada para: public_config/global");
         const docSnap = await getDoc(configDocRef);
 
         if (docSnap.exists()) {
-          const superAdminId = docSnap.data().superAdminId;
+          console.log("Documento 'public_config/global' encontrado.");
+          const data = docSnap.data();
+          console.log("Dados do documento:", data);
+          const superAdminId = data.superAdminId;
           if (superAdminId) {
+            console.log("ID do Super Admin encontrada:", superAdminId);
             setSuperAdminLink(`/?adminId=${superAdminId}`);
           } else {
-            console.error("Documento 'public_config/global' não contém o campo 'superAdminId'.");
+            console.error("ERRO CRÍTICO: O campo 'superAdminId' não existe no documento 'public_config/global'.");
             setSuperAdminLink('#');
           }
         } else {
-          console.error("Documento de configuração 'public_config/global' não encontrado.");
+          console.error("ERRO CRÍTICO: O documento 'public_config/global' não foi encontrado no Firestore. Verifique se ele foi criado corretamente.");
           setSuperAdminLink('#');
         }
       } catch (error) {
-        console.error("Erro ao buscar a configuração pública:", error);
+        console.error("ERRO FINAL: Falha ao buscar a configuração pública. Este é o erro de permissão.", error);
         setSuperAdminLink('#');
       } finally {
         setLinkLoading(false);
@@ -163,20 +168,17 @@ function MarketingContent() {
   );
 }
 
-// --- Componente "Roteador" que lê a URL ---
 function HomePageRouter() {
   const searchParams = useSearchParams();
   const adminId = searchParams.get('adminId');
 
   if (adminId) {
-    // CORREÇÃO FINAL: Passar a prop com o nome correto que o componente espera: adminUid
     return <PublicChatView adminUid={adminId} />;
   }
 
   return <MarketingContent />;
 }
 
-// --- Componente principal que exportamos ---
 export default function Home() {
   return (
     <Suspense fallback={<div className="flex h-screen w-full items-center justify-center">Carregando...</div>}> 

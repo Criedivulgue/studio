@@ -1,14 +1,10 @@
 {
   "rules": {
     "status": {
+      ".read": true,
       "$uid": {
-        ".read": "auth != null",
         ".write": "auth != null && auth.uid == $uid"
       }
-    },
-    "public_profiles": {
-      ".read": true,
-      ".write": false
     }
   }
 }

@@ -4,7 +4,7 @@ import {
   useState, useEffect, createContext, useContext, ReactNode, useMemo, useCallback
 } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, User as AuthUser } from 'firebase/auth';
 import { doc, onSnapshot, getDoc } from 'firebase/firestore';
 import { ref, onValue, set, onDisconnect, serverTimestamp } from "firebase/database";
 import { auth, db, rtdb } from '@/lib/firebase';
@@ -34,7 +34,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
+      // [CORREÇÃO DA CAUSA RAIZ]
+      // Se o usuário for anônimo, o AuthProvider simplesmente o ignora.
+      // Ele não limpa o estado nem interfere, permitindo que a PublicChatView gerencie a sessão.
+      if (firebaseUser && !firebaseUser.isAnonymous) {
         const userDocRef = doc(db, "users", firebaseUser.uid);
         const unsubscribeSnapshot = onSnapshot(userDocRef, (userDoc) => {
           if (userDoc.exists()) {
@@ -49,6 +52,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
               createdAt: firestoreData.createdAt,
             });
           } else {
+            // Se o usuário autenticado não existe no Firestore (ex: excluído), deslogue-o.
             setUser(null);
             logout(); 
           }
@@ -60,22 +64,29 @@ export function AuthProvider({ children }: AuthProviderProps) {
         });
         return () => unsubscribeSnapshot();
       } else {
+        // Se não houver usuário logado (ou for anônimo), o estado do admin é nulo.
         setUser(null);
         setLoading(false);
       }
     });
+
     return () => unsubscribe();
   }, []);
 
+  // Efeito para gerenciar a presença online (padrão Firebase)
   useEffect(() => {
     if (!user) return;
+
     const userStatusDatabaseRef = ref(rtdb, '/status/' + user.id);
     const connectedRef = ref(rtdb, '.info/connected');
+
     const listener = onValue(connectedRef, (snap) => {
       if (snap.val() !== true) return;
+      
       set(userStatusDatabaseRef, { isOnline: true, last_changed: serverTimestamp() });
       onDisconnect(userStatusDatabaseRef).set({ isOnline: false, last_changed: serverTimestamp() });
     });
+
     return () => {
       if (user?.id) {
         const userStatusOnDisconnectRef = ref(rtdb, '/status/' + user.id);
@@ -109,22 +120,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [checkAndRedirect]);
 
   const handleSignOut = useCallback(async () => {
-    // Primeiro, atualiza o status de presença, se o usuário existir
-    if (user?.id) {
-        try {
-            const userStatusDatabaseRef = ref(rtdb, '/status/' + user.id);
-            await set(userStatusDatabaseRef, { isOnline: false, last_changed: serverTimestamp() });
-        } catch (error) {
-            console.error("Falha ao atualizar status de presença no logout:", error);
-        }
-    }
-    
-    // Inicia o logout no Firebase e o redirecionamento
     await logout();
+    setUser(null);
     router.push('/login');
-    // A linha setUser(null) foi removida. O onAuthStateChanged cuidará disso.
-
-  }, [user, router]);
+  }, [router]);
 
   const value = useMemo(() => ({
     user,

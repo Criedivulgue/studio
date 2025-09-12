@@ -6,60 +6,19 @@ import { collection, query, where, getDocs } from 'firebase/firestore';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import type { PlatformUser } from '@/lib/types';
+import type { ContactColumn } from './_components/columns'; // CORREÇÃO APLICADA AQUI
 
-import { Button } from "@/components/ui/button";
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
-import { Plus, ArrowUpFromLine, ArrowDownToLine } from 'lucide-react';
-import { createDataTable } from '@/components/data-table';
-import { columns, ContactColumn } from './_components/columns';
-import { AddContactModal } from '@/components/admin/AddContactModal';
-import { ImportContactsModal } from '@/components/admin/ImportContactsModal'; // Importar o novo modal
-
-// Função para converter dados para CSV e iniciar o download
-function exportToCsv(filename: string, rows: object[]) {
-    if (!rows || rows.length === 0) {
-        return;
-    }
-    const separator = ',';
-    const keys = Object.keys(rows[0]);
-    const csvContent = 
-        keys.join(separator) + 
-        '\n' + 
-        rows.map(row => {
-            return keys.map(k => {
-                let cell = (row as any)[k] === null || (row as any)[k] === undefined ? '' : (row as any)[k];
-                cell = cell instanceof Array ? cell.join(' | ') : cell.toString();
-                cell = cell.replace(/"/g, '""');
-                if (cell.search(/([",\n])/g) >= 0) {
-                    cell = `"${cell}"`;
-                }
-                return cell;
-            }).join(separator);
-        }).join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    if (link.download !== undefined) {
-        const url = URL.createObjectURL(blob);
-        link.setAttribute("href", url);
-        link.setAttribute("download", filename);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    }
-}
-
-const ContactsDataTable = createDataTable<ContactColumn, any>();
+import { ContactManager } from '@/components/admin/ContactManager';
 
 export default function AdminContactsPage() {
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const [contacts, setContacts] = useState<ContactColumn[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false); // Renomeado para clareza
-  const [isImportModalOpen, setIsImportModalOpen] = useState(false); // Novo estado para o modal de importação
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   const fetchData = async (currentUser: PlatformUser) => {
     setLoading(true);
@@ -70,7 +29,7 @@ export default function AdminContactsPage() {
         : query(contactsCollection, where('ownerId', '==', currentUser.id));
 
       const tagsCollection = collection(db, 'tags');
-       const tagsQuery = currentUser.role === 'superadmin'
+      const tagsQuery = currentUser.role === 'superadmin'
         ? query(tagsCollection)
         : query(tagsCollection, where('ownerId', '==', currentUser.id));
 
@@ -124,7 +83,31 @@ export default function AdminContactsPage() {
         Grupos: c.groups,
         Interesses: c.interests,
     }));
-    exportToCsv('contatos.csv', dataToExport);
+
+    const separator = ',';
+    const keys = Object.keys(dataToExport[0]);
+    const csvContent = 
+        keys.join(separator) + 
+        '\n' + 
+        dataToExport.map(row => {
+            return keys.map(k => {
+                let cell = (row as any)[k] === null || (row as any)[k] === undefined ? '' : (row as any)[k];
+                cell = cell instanceof Array ? cell.join(' | ') : cell.toString();
+                cell = cell.replace(/"/g, '""');
+                if (cell.search(/([",\n])/g) >= 0) {
+                    cell = `"${cell}"`;
+                }
+                return cell;
+            }).join(separator);
+        }).join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.setAttribute("href", URL.createObjectURL(blob));
+    link.setAttribute("download", 'contatos.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
     toast({ title: 'Exportação Concluída', description: 'O arquivo CSV com seus contatos foi baixado.' });
   };
 
@@ -132,7 +115,7 @@ export default function AdminContactsPage() {
     if (!authLoading && user) {
       fetchData(user);
     }
-     if (!authLoading && !user) {
+    if (!authLoading && !user) {
       setLoading(false);
     }
   }, [user, authLoading]);
@@ -140,7 +123,7 @@ export default function AdminContactsPage() {
   const handleModalSuccess = () => {
     setIsAddModalOpen(false);
     setIsImportModalOpen(false);
-    if(user) fetchData(user); // Recarrega os dados após sucesso
+    if(user) fetchData(user);
   };
 
   if (authLoading || !user) {
@@ -153,49 +136,18 @@ export default function AdminContactsPage() {
   }
 
   return (
-    <>
-      <AddContactModal 
-        adminUid={user.id}
-        isOpen={isAddModalOpen} 
-        onClose={() => setIsAddModalOpen(false)} 
-        onSuccess={handleModalSuccess}
-        isSuperAdmin={user.role === 'superadmin'}
+    <div className="p-4 md:p-8">
+      <ContactManager 
+        user={user}
+        contacts={contacts}
+        loading={loading}
+        isAddModalOpen={isAddModalOpen}
+        setIsAddModalOpen={setIsAddModalOpen}
+        isImportModalOpen={isImportModalOpen}
+        setIsImportModalOpen={setIsImportModalOpen}
+        handleExport={handleExport}
+        handleModalSuccess={handleModalSuccess}
       />
-      <ImportContactsModal 
-        adminUid={user.id}
-        isOpen={isImportModalOpen}
-        onClose={() => setIsImportModalOpen(false)}
-        onSuccess={handleModalSuccess}
-      />
-
-      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-        <div className="flex items-center justify-between">
-          <Heading 
-            title={`Meus Contatos (${loading ? '...' : contacts.length})`}
-            description="Gerencie seus contatos para facilitar o envio de mensagens."
-          />
-          <div className="flex items-center space-x-2">
-            <Button variant="outline" onClick={() => setIsImportModalOpen(true)}>
-                <ArrowUpFromLine className="mr-2 h-4 w-4" /> Importar
-            </Button>
-            <Button variant="outline" onClick={handleExport}>
-                <ArrowDownToLine className="mr-2 h-4 w-4" /> Exportar
-            </Button>
-            <Button onClick={() => setIsAddModalOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" /> Adicionar Contato
-            </Button>
-          </div>
-        </div>
-        <Separator />
-        
-        <ContactsDataTable
-          columns={columns}
-          data={contacts}
-          searchKey="name"
-          placeholder="Filtrar por nome..."
-          emptyMessage="Nenhum contato encontrado. Adicione um para começar!"
-        />
-      </div>
-    </>
+    </div>
   );
 }
