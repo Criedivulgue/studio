@@ -1,24 +1,18 @@
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
-const { onSchedule } = require("firebase-functions/v2/scheduler"); // Correção: Importar o agendador v2
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-// Garante que o admin seja inicializado apenas uma vez.
 if (admin.apps.length === 0) {
   admin.initializeApp();
 }
 
-// Inicializa APIs
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+// ✅ CORREÇÃO FINAL: Apontando para o modelo mais recente e compatível.
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 const db = admin.firestore();
 
-// --- FUNÇÕES DE GATILHO (TRIGGERS) ---
-
-/**
- * Disparado quando um novo visitante envia uma mensagem.
- */
 exports.onNewVisitorMessage = onDocumentCreated(
   {
     document: "chatSessions/{sessionId}/messages/{messageId}",
@@ -46,12 +40,8 @@ exports.onNewVisitorMessage = onDocumentCreated(
     try {
       await db.runTransaction(async (transaction) => {
         const sessionDoc = await transaction.get(sessionRef);
-        if (!sessionDoc.exists) {
-          throw new Error("Session document not found!");
-        }
-        if (sessionDoc.data().aiProcessing) {
-          throw new Error("AI_PROCESSING_LOCKED");
-        }
+        if (!sessionDoc.exists) throw new Error("Session document not found!");
+        if (sessionDoc.data().aiProcessing) throw new Error("AI_PROCESSING_LOCKED");
         transaction.update(sessionRef, { aiProcessing: true });
       });
     } catch (error) {
@@ -65,8 +55,19 @@ exports.onNewVisitorMessage = onDocumentCreated(
 
     console.log(`Lock acquired for session ${sessionId}. Initiating AI response.`);
     try {
-      const adminUserDoc = await db.doc(`users/${newMessage.adminId}`).get();
-      const personalPrompt = adminUserDoc.exists() && adminUserDoc.data().aiPrompt
+      const sessionDoc = await sessionRef.get();
+      if (!sessionDoc.exists) {
+        throw new Error(`Session ${sessionId} not found during AI processing.`);
+      }
+      const sessionData = sessionDoc.data();
+      const adminId = sessionData.adminId;
+
+      if (!adminId) {
+          throw new Error(`AdminId not found in session ${sessionId}`);
+      }
+
+      const adminUserDoc = await db.doc(`users/${adminId}`).get();
+      const personalPrompt = adminUserDoc.exists && adminUserDoc.data().aiPrompt
         ? adminUserDoc.data().aiPrompt
         : "You are a helpful customer service assistant.";
 
@@ -113,11 +114,6 @@ exports.onNewVisitorMessage = onDocumentCreated(
   }
 );
 
-// --- FUNÇÕES CHAMÁVEIS (CALLABLE) ---
-
-/**
- * Converte um Lead anônimo em um Contato e Conversa permanentes.
- */
 exports.identifyLead = onCall({ region: "southamerica-east1" }, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
@@ -188,9 +184,6 @@ exports.identifyLead = onCall({ region: "southamerica-east1" }, async (request) 
   }
 });
 
-/**
- * Arquiva uma conversa e gera um resumo com IA.
- */
 exports.archiveAndSummarizeConversation = onCall(
   { region: "southamerica-east1", secrets: ["GEMINI_API_KEY"] },
   async (request) => {
@@ -229,8 +222,10 @@ exports.archiveAndSummarizeConversation = onCall(
         const role = msg.role === "admin" ? "ADMIN" : "CLIENTE";
         return `${role}: ${msg.content}`;
       }).join("\n");
+      // Usando o mesmo modelo 'flash' para consistência
+      const modelForSummary = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
       const prompt = `Por favor, resuma a seguinte conversa entre um agente de suporte (ADMIN) e um cliente (CLIENTE). O resumo deve ser conciso, em português, com no máximo 2 frases, e capturar o motivo principal do contato e a resolução. CONVERSAÇÃO:\n\n${history}`;
-      const result = await model.generateContent(prompt);
+      const result = await modelForSummary.generateContent(prompt);
       const response = await result.response;
       const summaryText = response.text().trim();
       const batch = db.batch();
@@ -253,11 +248,6 @@ exports.archiveAndSummarizeConversation = onCall(
   }
 );
 
-// --- FUNÇÕES AGENDADAS (SCHEDULED) ---
-
-/**
- * Correção: Função de limpeza reescrita com a sintaxe v2 `onSchedule`.
- */
 exports.cleanupOldChatSessions = onSchedule(
   {
     schedule: "every 24 hours",
@@ -281,7 +271,6 @@ exports.cleanupOldChatSessions = onSchedule(
       console.log(`Encontradas ${snapshot.size} sessões de chat antigas para apagar.`);
       const promises = snapshot.docs.map(doc => {
         console.log(`Agendando exclusão da sessão ${doc.id} e suas mensagens.`);
-        // Apaga a subcoleção de mensagens e depois o documento principal.
         return deleteCollection(doc.ref.collection("messages"), 100).then(() => doc.ref.delete());
       });
 
@@ -291,13 +280,10 @@ exports.cleanupOldChatSessions = onSchedule(
 
     } catch (error) {
       console.error("Erro durante a limpeza das sessões de chat:", error);
-      // Para funções agendadas, lançar um erro é suficiente para indicar falha.
       throw new Error("Falha ao limpar sessões antigas.");
     }
   }
 );
-
-// --- FUNÇÕES AUXILIARES (HELPERS) ---
 
 async function deleteCollection(collectionRef, batchSize) {
   const query = collectionRef.orderBy("__name__").limit(batchSize);

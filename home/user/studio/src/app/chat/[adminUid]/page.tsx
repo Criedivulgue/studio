@@ -1,17 +1,11 @@
 'use client';
-
 import ChatClient from './chat-client';
 import { useParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 
 /**
  * Componente de Cliente para a página de chat.
- * 
- * Devido a um problema persistente com o hot-reloading do Next.js/Turbopack
- * que não reconhece corretamente o acesso assíncrono a `params` em Server Components,
- * esta página foi convertida para um Client Component como uma solução robusta.
- * 
- * Ele usa o hook `useParams` para extrair o `adminUid` da URL no lado do cliente
+ * Usa o hook `useParams` para extrair o `adminUid` da URL no lado do cliente
  * e o passa para o `ChatClient`.
  */
 export default function ChatPage() {

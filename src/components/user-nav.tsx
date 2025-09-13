@@ -17,13 +17,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { LogOut, Link as LinkIcon } from "lucide-react";
+import { LogOut, Link as LinkIcon, Loader2 } from "lucide-react";
 
 export function UserNav() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, isLoggingOut } = useAuth();
   const { toast } = useToast();
 
-  if (!user) {
+  if (!user || user.role === 'anonymous') {
     return null;
   }
 
@@ -31,37 +31,32 @@ export function UserNav() {
     if (!user) return;
     const chatUrl = `${window.location.origin}/chat/${user.id}`;
 
-    // Tenta usar a API moderna (pode falhar em http ou por políticas de segurança)
     navigator.clipboard.writeText(chatUrl).then(() => {
       toast({
         title: "Link do Chat Copiado!",
         description: "O link foi copiado para a sua área de transferência.",
       });
     }).catch(() => {
-      // Fallback para o método clássico (mais compatível)
       try {
         const textArea = document.createElement('textarea');
         textArea.value = chatUrl;
-        textArea.style.position = 'fixed'; // Impede o scroll da página
+        textArea.style.position = 'fixed'; 
         textArea.style.opacity = '0';
         document.body.appendChild(textArea);
         textArea.focus();
         textArea.select();
-        
         document.execCommand('copy');
-
         document.body.removeChild(textArea);
-
         toast({
           title: "Link do Chat Copiado!",
           description: "O link foi copiado para a sua área de transferência (modo de compatibilidade).",
         });
       } catch (err) {
-        console.error('Falha ao copiar o link (ambos os métodos): ', err);
+        console.error('Falha ao copiar o link: ', err);
         toast({ 
           variant: 'destructive', 
           title: 'Erro', 
-          description: 'Não foi possível copiar o link. Por favor, copie manualmente.' 
+          description: 'Não foi possível copiar o link.' 
         });
       }
     });
@@ -103,9 +98,13 @@ export function UserNav() {
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={signOut}>
-          <LogOut className="mr-2 h-4 w-4" />
-          <span>Sair</span>
+        <DropdownMenuItem onClick={signOut} disabled={isLoggingOut}>
+          {isLoggingOut ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <LogOut className="mr-2 h-4 w-4" />
+          )}
+          <span>{isLoggingOut ? 'Saindo...' : 'Sair'}</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

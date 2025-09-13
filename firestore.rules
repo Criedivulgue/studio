@@ -19,10 +19,14 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isSessionParticipant(sessionData) {
-      return request.auth != null && 
-             (request.auth.uid == sessionData.visitorUid || 
-              request.auth.uid == sessionData.adminId);
+    function userExists() {
+      return request.auth != null &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function isAdminOrSuperAdmin() {
+      return userExists() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'superadmin'];
     }
 
     match /users/{userId} {
@@ -32,7 +36,7 @@ service cloud.firestore {
 
     match /public_profiles/{userId} {
       allow read: if true;
-      allow write: if request.auth.uid == userId;
+      allow write: if request.auth.uid == userId && userExists();
     }
 
     match /public_config/{documentId} {
@@ -42,88 +46,75 @@ service cloud.firestore {
 
     match /contacts/{contactId} {
       allow read, write: if isSuperAdmin();
-      allow create: if isAdmin() && request.resource.data.ownerId == request.auth.uid;
-      allow get, update, delete: if isAdmin() && resource.data.ownerId == request.auth.uid;
-      allow list: if isAdmin();
+      allow create: if isAdminOrSuperAdmin() && request.resource.data.ownerId == request.auth.uid;
+      allow get, update, delete: if isAdminOrSuperAdmin() && resource.data.ownerId == request.auth.uid;
+      allow list: if isAdminOrSuperAdmin();
     }
 
     match /tags/{tagId} {
       allow read, write: if isSuperAdmin();
-      allow create: if isAdmin() && request.resource.data.ownerId == request.auth.uid;
-      allow get, update, delete: if isAdmin() && resource.data.ownerId == request.auth.uid;
-      allow list: if isAdmin();
+      allow create: if isAdminOrSuperAdmin() && request.resource.data.ownerId == request.auth.uid;
+      allow get, update, delete: if isAdminOrSuperAdmin() && resource.data.ownerId == request.auth.uid;
+      allow list: if isAdminOrSuperAdmin();
     }
 
     match /conversations/{conversationId} {
       allow read, write: if isSuperAdmin();
-      allow create: if isAdmin() && request.resource.data.adminId == request.auth.uid;
-      allow get, update, delete: if isAdmin() && resource.data.adminId == request.auth.uid;
-      allow list: if isAdmin();
+      allow create: if isAdminOrSuperAdmin() && request.resource.data.adminId == request.auth.uid;
+      allow get, update, delete: if isAdminOrSuperAdmin() && resource.data.adminId == request.auth.uid;
+      allow list: if isAdminOrSuperAdmin();
 
       match /messages/{messageId} {
-        allow read, write: if isSuperAdmin() || (isAdmin() && get(/databases/$(database)/documents/conversations/$(conversationId)).data.adminId == request.auth.uid);
+        allow read, write: if isSuperAdmin() || (isAdminOrSuperAdmin() && get(/databases/$(database)/documents/conversations/$(conversationId)).data.adminId == request.auth.uid);
       }
     }
     
     match /ai_configs/{configId} {
       allow read, write: if isSuperAdmin();
-      allow get, list: if isAdmin();
-      allow create: if isAdmin() && request.resource.data.ownerId == request.auth.uid;
-      allow update, delete: if isAdmin() && resource.data.ownerId == request.auth.uid;
+      allow get, list: if isAdminOrSuperAdmin();
+      allow create: if isAdminOrSuperAdmin() && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if isAdminOrSuperAdmin() && resource.data.ownerId == request.auth.uid;
     }
 
-    // --- REGRAS CORRIGIDAS PARA CHAT SESSIONS ---
+    // --- REGRAS DE CHAT SEGURAS E FINAIS ---
     match /chatSessions/{sessionId} {
-      // PERMITE CRIAÇÃO por qualquer usuário autenticado (incluindo anônimos)
-      // Verifica se o visitorUid é o mesmo do usuário autenticado
       allow create: if isAuthenticatedUser() && 
-                     request.resource.data.visitorUid == request.auth.uid;
+                     request.resource.data.visitorUid == request.auth.uid &&
+                     request.resource.data.adminId != null;
 
-      // PERMITE LEITURA pelo visitante ou pelo admin da sessão
       allow get: if isAuthenticatedUser() && 
                   (request.auth.uid == resource.data.visitorUid || 
                    request.auth.uid == resource.data.adminId);
       
-      // PERMITE LISTAGEM apenas por administradores (não por anônimos)
-      allow list: if isAdmin();
+      allow list: if isAdminOrSuperAdmin();
       
-      // PERMITE ATUALIZAÇÃO apenas pelo admin da sessão
-      allow update, delete: if isAuthenticatedUser() && 
-                             request.auth.uid == resource.data.adminId;
+      // ✅ CORREÇÃO: Permite que o visitante OU o admin atualizem a sessão.
+      allow update: if isAuthenticatedUser() &&
+                     (request.auth.uid == resource.data.visitorUid || 
+                      request.auth.uid == resource.data.adminId);
+      
+      allow delete: if isSuperAdmin();
 
-      // SUBColeção de mensagens
       match /messages/{messageId} {
         
-        // Função auxiliar para obter dados da sessão pai
-        function getSessionData() {
-          return get(/databases/$(database)/documents/chatSessions/$(sessionId)).data;
-        }
-        
-        // PERMITE CRIAÇÃO de mensagens pelo visitante ou pelo admin
         allow create: if isAuthenticatedUser() && 
-                       (request.auth.uid == getSessionData().visitorUid ||
-                        request.auth.uid == getSessionData().adminId);
+                       request.auth.uid == request.resource.data.senderId;
         
-        // PERMITE LEITURA de mensagens pelo visitante ou pelo admin
-        allow read: if isAuthenticatedUser() && 
-                     (request.auth.uid == getSessionData().visitorUid ||
-                      request.auth.uid == getSessionData().adminId);
-        
-        // PERMITE LISTAGEM de mensagens pelo visitante ou pelo admin
-        allow list: if isAuthenticatedUser() && 
-                     (request.auth.uid == getSessionData().visitorUid ||
-                      request.auth.uid == getSessionData().adminId);
+        allow read, list: if isAuthenticatedUser() && 
+                     exists(/databases/$(database)/documents/chatSessions/$(sessionId)) &&
+                     (request.auth.uid == get(/databases/$(database)/documents/chatSessions/$(sessionId)).data.visitorUid ||
+                      request.auth.uid == get(/databases/$(database)/documents/chatSessions/$(sessionId)).data.adminId);
       }
     }
 
     match /system_settings/{documentId} {
-      allow read: if isAdmin() || isSuperAdmin();
+      allow read: if isAdminOrSuperAdmin();
       allow write: if isSuperAdmin();
     }
     
     match /notifications/{notificationId} {
-      allow read, write: if isSuperAdmin() || isAdmin();
-      allow list: if isSuperAdmin() || isAdmin();
+      allow read, write: if isSuperAdmin() || isAdminOrSuperAdmin();
+      allow list: if isSuperAdmin() || isAdminOrSuperAdmin();
     }
   }
 }
