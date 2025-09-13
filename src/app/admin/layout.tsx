@@ -19,7 +19,7 @@ import {
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useFirebaseMessaging } from '@/hooks/useFirebaseMessaging';
-import { useAuth } from '@/hooks/use-auth';
+import { useAuth, type PlatformUser } from '@/hooks/use-auth'; // ✅ Import type
 import { useToast } from '@/hooks/use-toast';
 import { logout } from '@/services/authService';
 import { SidebarNav } from '@/components/sidebar-nav';
@@ -35,10 +35,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const { user, loading } = useAuth();
 
   useEffect(() => {
+    // ✅ Só redirecionar quando loading terminar E não tiver user
     if (!loading && !user) {
       router.push('/login');
     }
-    if (!loading && user?.role && !['admin', 'superadmin'].includes(user.role)) {
+    
+    // ✅ Só verificar roles quando loading terminar E tiver user
+    if (!loading && user && user.role && !['admin', 'superadmin'].includes(user.role)) {
       toast({ variant: "destructive", title: "Acesso Negado" });
       router.push('/login');
     }
@@ -54,7 +57,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
   };
 
-  if (loading || !user?.role) {
+  if (loading || !user) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -62,12 +65,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
+  // ✅ VERIFICAÇÃO SIMPLIFICADA E TYPE-SAFE
+  const isPlatformUser = user.role === 'admin' || user.role === 'superadmin';
+  const platformUser = isPlatformUser ? user as PlatformUser : null;
+
   return (
     <div className="grid min-h-screen w-full md:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr]">
-      <div className="hidden border-r bg-muted/40 md:block">
+       <div className="hidden border-r bg-muted/40 md:block">
         <div className="flex h-full max-h-screen flex-col gap-2">
           <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
-            {/* CORREÇÃO: Link do logo no desktop aponta para a raiz "/" */}
             <Link href="/" className="flex items-center gap-2 font-semibold">
               <Logo />
               <span className="">WhatsAi</span>
@@ -79,63 +85,68 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="mt-auto p-4 border-t">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                  <div className="flex items-center gap-3 cursor-pointer hover:bg-accent p-2 rounded-lg">
-                      <Avatar className='h-9 w-9'>
-                          <AvatarImage src={user.avatar} alt={user.name ?? 'Avatar'} />
-                          <AvatarFallback>{user.name?.charAt(0).toUpperCase() ?? 'U'}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 overflow-hidden">
-                          <p className="text-sm font-medium text-foreground truncate">{user.name ?? 'Carregando...'}</p>
-                          <p className="text-xs text-muted-foreground truncate">{user.email ?? ''}</p>
-                      </div>
+                <div className="flex items-center gap-3 cursor-pointer hover:bg-accent p-2 rounded-lg">
+                  <Avatar className='h-9 w-9'>
+                    <AvatarImage src={platformUser?.avatar} alt={platformUser?.name ?? 'Avatar'} />
+                    <AvatarFallback>
+                      {platformUser?.name?.charAt(0).toUpperCase() ?? 'U'}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 overflow-hidden">
+                    <p className="text-sm font-medium text-foreground truncate">
+                      {platformUser?.name ?? 'Carregando...'}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {platformUser?.email ?? ''}
+                    </p>
                   </div>
+                </div>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56 mb-2" side="top" align="start">
-                  <DropdownMenuLabel>Minha Conta</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <Link href="/admin/profile" passHref>
-                      <DropdownMenuItem>
-                          <UserIcon className="mr-2 h-4 w-4" />
-                          <span>Editar Perfil Pessoal</span>
-                      </DropdownMenuItem>
-                  </Link>
-                  <DropdownMenuItem onClick={handleLogout}>
-                      <LogOut className="mr-2 h-4 w-4" />
-                      <span>Sair</span>
+                <DropdownMenuLabel>Minha Conta</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <Link href="/admin/profile" passHref>
+                  <DropdownMenuItem>
+                    <UserIcon className="mr-2 h-4 w-4" />
+                    <span>Editar Perfil Pessoal</span>
                   </DropdownMenuItem>
+                </Link>
+                <DropdownMenuItem onClick={handleLogout}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>Sair</span>
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         </div>
       </div>
       <div className="flex flex-col">
-         <header className="flex h-14 items-center gap-4 border-b bg-muted/40 px-4 lg:h-[60px] lg:px-6">
-           <Sheet>
+        <header className="flex h-14 items-center gap-4 border-b bg-muted/40 px-4 lg:h-[60px] lg:px-6">
+          <Sheet>
             <SheetTrigger asChild>
               <Button variant="outline" size="icon" className="shrink-0 md:hidden">
-                 <Menu className="h-5 w-5" />
-                 <span className="sr-only">Toggle navigation menu</span>
+                <Menu className="h-5 w-5" />
+                <span className="sr-only">Toggle navigation menu</span>
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="flex flex-col">
-               <nav className="grid gap-2 text-lg font-medium">
-                 {/* CORREÇÃO: Link e ícone do logo no mobile padronizados e apontando para "/" */}
-                 <Link href="/" className="flex items-center gap-2 text-lg font-semibold mb-4">
-                   <Logo />
-                   <span className="">WhatsAi</span>
-                 </Link>
-                 <SidebarNav navItems={adminNavItems} />
-               </nav>
+              <nav className="grid gap-2 text-lg font-medium">
+                <Link href="/" className="flex items-center gap-2 text-lg font-semibold mb-4">
+                  <Logo />
+                  <span className="">WhatsAi</span>
+                </Link>
+                <SidebarNav navItems={adminNavItems} />
+              </nav>
             </SheetContent>
-           </Sheet>
-           <div className="w-full flex-1"></div>
-           <CopyChatLinkButton />
-           <NotificationBell />
-         </header>
+          </Sheet>
+          <div className="w-full flex-1"></div>
+          <CopyChatLinkButton />
+          <NotificationBell />
+        </header>
         <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6">
           {children}
         </main>
       </div>
     </div>
-  )
+  );
 }

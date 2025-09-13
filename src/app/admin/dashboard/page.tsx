@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-// CORREÇÃO: Remover import antigo do DB e adicionar os novos
 import { collection, query, where, getDocs, Firestore } from 'firebase/firestore';
 import { ensureFirebaseInitialized, getFirebaseInstances } from '@/lib/firebase';
 import { useAuth } from '@/hooks/use-auth';
@@ -15,11 +14,9 @@ export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth(); 
   const [stats, setStats] = useState({ contacts: 0, groups: 0, chats: 0 });
   const [dataLoading, setDataLoading] = useState(true);
-  // CORREÇÃO: Adicionar estado para o DB e toast
   const [db, setDb] = useState<Firestore | null>(null);
   const { toast } = useToast();
 
-  // CORREÇÃO: Efeito para inicializar o Firebase
   useEffect(() => {
     const initFirebase = async () => {
       try {
@@ -35,9 +32,9 @@ export default function DashboardPage() {
     initFirebase();
   }, [toast]);
 
-  // CORREÇÃO: Efeito para buscar dados, agora dependente do DB
   useEffect(() => {
-    if (authLoading || !user?.id || !db) {
+    // ✅ CORREÇÃO CRÍTICA: Não buscar dados se não for admin
+    if (authLoading || !user || user.role === 'anonymous' || !db) {
       if (!authLoading) setDataLoading(false);
       return;
     }
@@ -68,6 +65,15 @@ export default function DashboardPage() {
   }, [user, authLoading, db, toast]);
 
   const isLoading = authLoading || dataLoading;
+
+  // ✅ Mostrar loading enquanto verifica autenticação
+  if (authLoading) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">

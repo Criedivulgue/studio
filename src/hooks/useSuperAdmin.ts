@@ -81,8 +81,8 @@ export const useSuperAdmin = () => {
             setLoading(false);
         }
     }
-    // O hook espera pelo estado `loading` do useAuth ser resolvido
-  }, [user]);
+    // A correção definitiva: usar um valor primitivo e estável (ID) na dependência.
+  }, [user?.id]);
 
   return {
     dashboardData,

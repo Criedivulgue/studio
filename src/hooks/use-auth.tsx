@@ -5,8 +5,7 @@ import { getFirebaseInstances, ensureFirebaseInitialized } from '@/lib/firebase'
 import { onAuthStateChanged, User as FirebaseUser, signOut as firebaseSignOut } from 'firebase/auth';
 import { doc, onSnapshot, DocumentData } from 'firebase/firestore';
 
-// Tipo para um utilizador da plataforma (admin/superadmin)
-interface PlatformUser extends DocumentData {
+export interface PlatformUser extends DocumentData {
   id: string;
   role: 'admin' | 'superadmin';
   displayName: string;
@@ -14,14 +13,12 @@ interface PlatformUser extends DocumentData {
   avatar?: string;
 }
 
-// Tipo para um visitante anónimo
 interface AnonymousUser {
   id: string;
   role: 'anonymous';
   isAnonymous: true;
 }
 
-// O utilizador do contexto pode ser um administrador ou um visitante
 export type AuthUser = PlatformUser | AnonymousUser;
 
 interface AuthContextType {
@@ -55,47 +52,60 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     let unsubscribeAuth: () => void;
     let unsubscribeSnapshot: () => void;
+    let isMounted = true;
 
-    ensureFirebaseInitialized().then(() => {
+    const initializeAuth = async () => {
+      await ensureFirebaseInitialized();
       const { auth, db } = getFirebaseInstances();
 
       unsubscribeAuth = onAuthStateChanged(auth, (fbUser) => {
-        unsubscribeSnapshot?.(); // Limpa o listener de perfil anterior
+        if (!isMounted) return;
+        
+        unsubscribeSnapshot?.();
+        setFirebaseUser(fbUser);
 
         if (fbUser) {
-          setFirebaseUser(fbUser);
           const userDocRef = doc(db, 'users', fbUser.uid);
 
           unsubscribeSnapshot = onSnapshot(userDocRef, (docSnap) => {
+            if (!isMounted) return;
+
             if (docSnap.exists()) {
-              // CASO 1: É um administrador/superadmin
-              setUser({ id: docSnap.id, ...docSnap.data() } as PlatformUser);
-              setLoading(false);
-            } else {
-              // CASO 2: Não tem perfil. É um visitante anónimo?
-              if (fbUser.isAnonymous) {
-                setUser({ id: fbUser.uid, role: 'anonymous', isAnonymous: true });
-                setLoading(false);
+              const userData = docSnap.data();
+              
+              if (userData.role === 'admin' || userData.role === 'superadmin') {
+                setUser({ id: docSnap.id, ...userData } as PlatformUser);
               } else {
-                // CASO 3: É um utilizador registado mas sem perfil (erro)
-                console.warn('Utilizador registado sem perfil. A deslogar.');
-                signOut();
+                setUser(null);
+                console.warn('Usuário sem permissões de admin');
               }
+            } else {
+              setUser(null);
+              console.warn('Usuário registrado sem perfil');
             }
+            setLoading(false);
           }, (error) => {
-            console.error("Erro no onSnapshot do perfil:", error);
-            signOut(); // Em caso de erro de permissão, deslogar
+            if (!isMounted) return;
+            console.error("Erro no snapshot:", error);
+            setUser(null);
+            setLoading(false);
           });
         } else {
-          // CASO 4: Não há ninguém logado
           setUser(null);
-          setFirebaseUser(null);
           setLoading(false);
         }
+      }, (error) => {
+        if (!isMounted) return;
+        console.error("Erro no onAuthStateChanged:", error);
+        setUser(null);
+        setLoading(false);
       });
-    });
+    };
+
+    initializeAuth();
 
     return () => {
+      isMounted = false;
       unsubscribeAuth?.();
       unsubscribeSnapshot?.();
     };

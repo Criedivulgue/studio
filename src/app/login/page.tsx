@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,6 @@ import { Logo } from "@/components/logo";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-// CORREÇÃO: Importar 'login' e 'register' e remover as funções antigas.
 import { login, register } from "@/services/authService";
 import { PlatformUser } from "@/lib/types";
 
@@ -53,13 +52,6 @@ export default function LoginPage() {
   const { toast } = useToast();
   const { user, loading: isAuthLoading } = useAuth();
 
-  useEffect(() => {
-    if (!isAuthLoading && user) {
-      const targetUrl = user.role === 'superadmin' ? '/super-admin/dashboard' : '/admin/dashboard';
-      window.location.href = targetUrl;
-    }
-  }, [isAuthLoading, user]);
-
   const redirectToDashboard = (loggedInUser: PlatformUser) => {
     toast({
       title: `Bem-vindo, ${loggedInUser.name}!`,
@@ -69,7 +61,6 @@ export default function LoginPage() {
     window.location.href = targetUrl;
   }
 
-  // CORREÇÃO: Simplificar handleLogin para usar a nova função 'login'
   const handleLogin = async () => {
     setIsSubmitting(true);
     try {
@@ -81,7 +72,6 @@ export default function LoginPage() {
     }
   };
 
-  // CORREÇÃO: Ajustar handleSignUp para usar a nova função 'register'
   const handleSignUp = async () => {
     setIsSubmitting(true);
     try {
@@ -101,7 +91,7 @@ export default function LoginPage() {
     }
   };
 
-  if (isAuthLoading || user) {
+  if (isAuthLoading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
