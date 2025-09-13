@@ -21,7 +21,7 @@ export function CopyChatLinkButton() {
     navigator.clipboard.writeText(chatUrl).then(() => {
       toast({ title: "Link Copiado!", description: "Divulgue para iniciar novas conversas." });
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000); // Reset icon after 2 seconds
+      setTimeout(() => setCopied(false), 2000); // Reset  icon after 2 seconds
     }, (err) => {
       console.error('Could not copy text: ', err);
       toast({ variant: "destructive", title: "Falha ao copiar", description: "Não foi possível copiar o link." });

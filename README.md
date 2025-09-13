@@ -1,6 +1,6 @@
-# Omniflow AI
+# WhatsAI
 
-Bem-vindo ao Omniflow AI, uma plataforma de chat inteligente projetada para integração em websites, combinando a robustez do Firebase com a inteligência do Google Gemini.
+Bem-vindo ao WhatsAI, uma plataforma de chat inteligente projetada para integração em websites, combinando a robustez do Firebase com a inteligência do Google Gemini.
 
 Este documento serve como um guia de início rápido para a estrutura e os conceitos fundamentais do projeto.
 
@@ -41,3 +41,50 @@ O sistema utiliza uma abordagem híbrida para a IA:
 3.  **Execute o ambiente de desenvolvimento:** `npm run dev`
 
 Lembre-se de consultar o `SYSTEM_ARCHITECTURE.md` antes de fazer alterações significativas na lógica de negócio principal.
+
+## Ação Atual para Inspecionar e Resolver
+Inspecione para CONFIRMAR SE AS SEGUINTE INFORMAÇÕES ESTÃO CORRETAS, LEIA TAMBEM O /SYSTEM_ARCHITECTURE.md
+
+# Conforme o desenvolvedor anterior:
+Botão "Divulgar Chat"
+
+ o componente src/components/admin/CopyChatLinkButton.tsx tem a lógica errada. Mesmo após minha correção anterior (que ajustou o formato da URL de /?adminId= para /chat/), a funcionalidade principal ainda é apenas copiar o link. Ela não cria um link de compartilhamento para o WhatsApp (https://wa.me/...) com uma mensagem personalizada. O nome do arquivo e o ícone também estão desalinhados com a funcionalidade desejada de "Compartilhar".
+Recomendação: O componente precisa ser fundamentalmente alterado.
+Renomear o arquivo para algo mais apropriado, como ShareChatLinkButton.tsx.
+Alterar o ícone e o texto para refletir a ação de compartilhar.
+Reescrever a lógica handleCopy para construir e abrir uma URL wa.me que inclua uma mensagem de texto e o link do chat.
+
+# Metadata para pré-visualizaçao OPEN GRAPH
+Status: Não Implementado
+Observação: Verifiquei o arquivo src/app/chat/[adminUid]/page.tsx. Atualmente, ele não possui a função generateMetadata. Isso significa que, quando um link de chat é compartilhado, nenhuma pré-visualização com o nome e a imagem do administrador será exibida. A funcionalidade descrita na arquitetura está ausente.
+Recomendação: Implementar a função generateMetadata neste arquivo. A função precisará buscar os dados do perfil público do administrador no Firestore (public_profiles) e usar esses dados para exportar as meta-tags og:title, og:description, e og:image.
+Status: Não Implementado
+Observação: Analisei a página inicial em src/app/page.tsx. A lógica para buscar dinamicamente o superAdminId do documento de configuração (public_config/global) e atribuí-lo ao botão "Iniciar Atendimento" não está presente. Isso significa que a página inicial não está direcionando para o chat do super-administrador conforme especificado.
+Recomendação: Adicionar a lógica de busca de dados no lado do servidor (server-side) à src/app/page.tsx para obter o superAdminId e passá-lo como prop para o botão, tornando o link dinâmico.
+Para alinhar o projeto com a arquitetura definida, proponho executar as seguintes tarefas, em ordem:
+
+Corrigir o Botão de Compartilhamento: Renomear o arquivo src/components/admin/CopyChatLinkButton.tsx para ShareChatLinkButton.tsx e reescrever completamente sua funcionalidade para criar e abrir um link de compartilhamento do WhatsApp.
+Implementar a Geração de Metadata: Criar e implementar a função generateMetadata em src/app/chat/[adminUid]/page.tsx para permitir a pré-visualização de links.
+Implementar a Lógica do Super-Admin: Modificar a página inicial (src/app/page.tsx) para buscar dinamicamente o ID do super-administrador e configurar o link do botão de chat principal.
+
+## Base para a Implementação
+Aqui está a lista de arquivos e a justificativa para a alteração em cada um:
+
+Arquivo: src/components/admin/CopyChatLinkButton.tsx
+Justificativa: Este é o componente do botão. A sua lógica será reescrita para, em vez de copiar um link, construir e abrir uma URL do WhatsApp (https://wa.me/...) contendo uma mensagem padrão e o link do chat. O texto e o ícone do botão também serão atualizados aqui para refletir a nova ação.
+Arquivo: src/app/chat/[adminUid]/page.tsx
+
+Justificativa: Para que a pré-visualização do link funcione, precisamos adicionar metadados (título e imagem) ao HTML da página. No Next.js, isso é feito exportando uma função generateMetadata neste arquivo. A função irá rodar no servidor para buscar as informações do administrador antes de a página ser enviada para o visitante.
+Arquivo: src/lib/firebase-admin.ts
+
+Justificativa: A função generateMetadata precisa buscar dados do perfil do administrador (nome, foto) no Firestore. Essa busca no lado do servidor requer uma instância autenticada do Firebase Admin. Este arquivo centraliza a inicialização e o acesso a essa instância, e será usado pela função generateMetadata.
+Arquivo: src/lib/types.ts
+
+Justificativa: Para garantir a consistência e segurança dos dados, definiremos um tipo PublicProfile neste arquivo. Ele irá modelar a estrutura dos dados do perfil público (ex: displayName, avatarUrl) que são lidos do Firestore e usados pela função generateMetadata.
+Arquivo: src/app/page.tsx
+
+Justificativa: Esta é a página inicial. Atualmente, ela é estática. Precisamos adicionar lógica de busca de dados no lado do servidor a este arquivo para que ele consulte o Firestore, obtenha o superAdminId da configuração global (public_config/global), e passe esse ID para o componente do botão "Iniciar Atendimento".
+Arquivo: src/lib/firebase-admin.ts
+
+Justificativa: Assim como na tarefa anterior, a página inicial usará a instância do Firebase Admin deste arquivo para se conectar de forma segura ao Firestore no servidor e buscar o superAdminId.
+Estes são todos os arquivos que precisam ser modificados. A análise confirma que as alterações propostas estão alinhadas com a arquitetura do Next.js e com as melhores práticas para interagir com o Firebase.
