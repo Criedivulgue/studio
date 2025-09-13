@@ -1,37 +1,13 @@
-'use client';
+import ChatClient from '@/app/chat/[adminUid]/chat-client';
 
-import ChatClient from './chat-client';
-import { useParams } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
+// Este é o "Posto de Vigilância" (Server Component).
+// Sua única função é extrair os parâmetros da URL no lado do servidor e passar para o componente cliente.
+// Esta abordagem é a mais limpa e a correta arquiteturalmente.
+// A única alteração necessária é usar um caminho absoluto na importação para contornar um bug do sistema de build.
+export default function ChatPage({ params }: { params: { adminUid: string } }) {
+  const { adminUid } = params;
 
-/**
- * Componente de Cliente para a página de chat.
- * 
- * Devido a um problema persistente com o hot-reloading do Next.js/Turbopack
- * que não reconhece corretamente o acesso assíncrono a `params` em Server Components,
- * esta página foi convertida para um Client Component como uma solução robusta.
- * 
- * Ele usa o hook `useParams` para extrair o `adminUid` da URL no lado do cliente
- * e o passa para o `ChatClient`.
- */
-export default function ChatPage() {
-  const params = useParams();
-  
-  // O `useParams` pode retornar string | string[] | undefined.
-  // Garantimos que temos uma string única.
-  const adminUid = Array.isArray(params.adminUid) ? params.adminUid[0] : params.adminUid;
-
-  // Se, por algum motivo, o adminUid não estiver disponível na URL, 
-  // mostramos um estado de carregamento para evitar erros.
-  if (!adminUid) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        <p className="ml-3">Carregando dados do chat...</p>
-      </div>
-    );
-  }
-
-  // Renderiza o componente de cliente, passando a ID do admin.
+  // Renderiza o componente de cliente puro, passando a adminUid como uma prop simples.
+  // O ChatClient já tem o "'use client'" e cuidará de toda a lógica do lado do cliente.
   return <ChatClient adminUid={adminUid} />;
 }
