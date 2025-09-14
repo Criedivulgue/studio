@@ -27,7 +27,7 @@ import { useFirebaseMessaging } from '@/hooks/useFirebaseMessaging';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import { logout } from '@/services/authService';
-import { CopyChatLinkButton } from '@/components/admin/CopyChatLinkButton';
+import { ShareChatLinkButton } from '@/components/admin/ShareChatLinkButton';
 import { Logo } from '@/components/logo';
 
 // Este componente de layout é o "guardião" de toda a área do Super Admin.
@@ -131,7 +131,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
             </SheetContent>
           </Sheet>
           <div className="w-full flex-1"></div>
-          <CopyChatLinkButton />
+          <ShareChatLinkButton />
           <NotificationBell />
         </header>
         <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6">

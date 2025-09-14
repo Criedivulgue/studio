@@ -25,7 +25,7 @@ import { logout } from '@/services/authService';
 import { SidebarNav } from '@/components/sidebar-nav';
 import { adminNavItems } from '@/config/nav-links';
 import { Logo } from '@/components/logo';
-import { CopyChatLinkButton } from '@/components/admin/CopyChatLinkButton';
+import { ShareChatLinkButton } from '@/components/admin/ShareChatLinkButton';
 import { NotificationBell } from "@/components/notification-bell";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -140,7 +140,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </SheetContent>
           </Sheet>
           <div className="w-full flex-1"></div>
-          <CopyChatLinkButton />
+          <ShareChatLinkButton />
           <NotificationBell />
         </header>
         <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6">

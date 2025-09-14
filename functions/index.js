@@ -9,7 +9,6 @@ if (admin.apps.length === 0) {
 }
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-// ✅ CORREÇÃO FINAL: Apontando para o modelo mais recente e compatível.
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 const db = admin.firestore();
 
@@ -65,11 +64,16 @@ exports.onNewVisitorMessage = onDocumentCreated(
       if (!adminId) {
           throw new Error(`AdminId not found in session ${sessionId}`);
       }
+      
+      const globalAiSettingsDoc = await db.doc('system_settings/ai_global').get();
+      const globalPrompt = globalAiSettingsDoc.exists && globalAiSettingsDoc.data().prompt
+        ? globalAiSettingsDoc.data().prompt
+        : "Você é um assistente prestativo.";
 
       const adminUserDoc = await db.doc(`users/${adminId}`).get();
-      const personalPrompt = adminUserDoc.exists && adminUserDoc.data().aiPrompt
+      const knowledgeBase = adminUserDoc.exists && adminUserDoc.data().aiPrompt
         ? adminUserDoc.data().aiPrompt
-        : "You are a helpful customer service assistant.";
+        : "";
 
       const messagesRef = sessionRef.collection("messages");
       const messagesSnapshot = await messagesRef.orderBy("timestamp", "asc").limit(20).get();
@@ -83,8 +87,26 @@ exports.onNewVisitorMessage = onDocumentCreated(
       });
       history.pop();
 
-      const chat = model.startChat({ history });
-      const result = await chat.sendMessage(newMessage.content);
+      // CORREÇÃO: Envolvendo a instrução do sistema no formato de objeto correto.
+      const chat = model.startChat({ 
+        history,
+        systemInstruction: {
+          parts: [{ text: globalPrompt }],
+        },
+      });
+
+      const userQuestion = newMessage.content;
+      const fullPrompt = `USANDO O DOCUMENTO DE CONHECIMENTO ABAIXO COMO CONTEXTO, responda a pergunta do usuário.
+---
+DOCUMENTO DE CONHECIMENTO:
+${knowledgeBase}
+---
+PERGUNTA DO USUÁRIO:
+${userQuestion}`;
+      
+      console.log(`Sending combined prompt to AI for session ${sessionId}.`);
+
+      const result = await chat.sendMessage(fullPrompt);
       const response = await result.response;
       const aiResponseText = response.text().trim();
 
@@ -222,7 +244,7 @@ exports.archiveAndSummarizeConversation = onCall(
         const role = msg.role === "admin" ? "ADMIN" : "CLIENTE";
         return `${role}: ${msg.content}`;
       }).join("\n");
-      // Usando o mesmo modelo 'flash' para consistência
+      
       const modelForSummary = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
       const prompt = `Por favor, resuma a seguinte conversa entre um agente de suporte (ADMIN) e um cliente (CLIENTE). O resumo deve ser conciso, em português, com no máximo 2 frases, e capturar o motivo principal do contato e a resolução. CONVERSAÇÃO:\n\n${history}`;
       const result = await modelForSummary.generateContent(prompt);

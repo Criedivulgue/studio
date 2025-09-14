@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-// CORREÇÃO: Imports do Firebase ajustados
 import { Firestore, collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, getDocs, deleteDoc, writeBatch, where } from 'firebase/firestore';
 import { Functions, httpsCallable } from 'firebase/functions';
 import { ensureFirebaseInitialized, getFirebaseInstances } from '@/lib/firebase';
@@ -10,7 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Send, MoreVertical, Sparkles, Trash2, Loader2, MessageSquare, Archive, UserPlus, Users } from 'lucide-react';
+// MODIFICAÇÃO: Importado o ícone ArrowLeft para o botão de voltar no mobile
+import { Send, MoreVertical, Sparkles, Trash2, Loader2, MessageSquare, Archive, UserPlus, Users, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -21,10 +21,7 @@ import { LeadIdentificationModal } from '@/components/chat/LeadIdentificationMod
 
 export type ActiveChat = (Conversation & { type: 'CONVERSATION' }) | (ChatSession & { type: 'SESSION' });
 
-// CORREÇÃO: A função httpsCallable será obtida de forma assíncrona
-
 export function Chat({ user }: { user: PlatformUser }) {
-  // CORREÇÃO: Estados para instâncias do Firebase
   const [db, setDb] = useState<Firestore | null>(null);
   const [functions, setFunctions] = useState<Functions | null>(null);
 
@@ -44,7 +41,6 @@ export function Chat({ user }: { user: PlatformUser }) {
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
   const adminId = user.id;
 
-  // CORREÇÃO: Efeito para inicializar o Firebase
   useEffect(() => {
     const initFirebase = async () => {
       try {
@@ -61,10 +57,9 @@ export function Chat({ user }: { user: PlatformUser }) {
     initFirebase();
   }, [toast]);
 
-  // CORREÇÃO: Efeito para carregar chats quando o DB estiver pronto
   useEffect(() => {
     if (!adminId || !db) {
-      if (db) setLoading(false); // Só para o loading se o DB já estiver lá mas o adminId não.
+      if (db) setLoading(false);
       return;
     }
     setLoading(true);
@@ -95,7 +90,6 @@ export function Chat({ user }: { user: PlatformUser }) {
     };
   }, [adminId, db, toast]);
 
-  // CORREÇÃO: Efeito para carregar mensagens quando o DB e o chat selecionado estiverem prontos
   useEffect(() => {
     if (!selectedChat || !db) {
       setMessages([]);
@@ -209,8 +203,14 @@ export function Chat({ user }: { user: PlatformUser }) {
 
   return (
     <>
-      <div className="flex h-[calc(100vh-120px)] border rounded-lg bg-card text-card-foreground">
-        <aside className="w-1/3 md:w-1/4 border-r flex flex-col">
+      {/* MODIFICAÇÃO: Adicionado `overflow-hidden` para garantir que o container principal controle o layout */}
+      <div className="flex h-[calc(100vh-120px)] border rounded-lg bg-card text-card-foreground overflow-hidden">
+        
+        {/* MODIFICAÇÃO: Classes de responsividade para mostrar/esconder a lista de chats */}
+        <aside className={cn(
+          "h-full flex flex-col border-r",
+          selectedChat ? "hidden md:flex md:w-1/3 lg:w-1/4" : "w-full md:flex md:w-1/3 lg:w-1/4"
+        )}>
           <div className="p-4 border-b"><Input placeholder="Buscar chats..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} disabled={isLoading} /></div>
           <ScrollArea className="flex-1">
             {isLoading ? <div className="p-4 text-center text-muted-foreground flex items-center justify-center h-full"><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Carregando...</div> :
@@ -228,11 +228,19 @@ export function Chat({ user }: { user: PlatformUser }) {
           </ScrollArea>
         </aside>
 
-        <main className="flex-1 flex flex-col">
+        {/* MODIFICAÇÃO: Classes de responsividade para mostrar/esconder a janela de conversa */}
+        <main className={cn(
+          "h-full flex-1 flex-col",
+          selectedChat ? "flex" : "hidden md:flex"
+        )}>
           {selectedChat ? (
             <>
               <div className="p-4 border-b flex items-center justify-between gap-4">
-                <div className="flex items-center gap-4 truncate">
+                <div className="flex items-center gap-2 truncate">
+                  {/* MODIFICAÇÃO: Botão para voltar à lista de chats em telas pequenas */}
+                  <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setSelectedChat(null)}>
+                      <ArrowLeft className="h-5 w-5" />
+                  </Button>
                   <Avatar><AvatarFallback>{selectedChat.type === 'SESSION' ? <Users className='h-5 w-5'/> : (selectedChat.contactName || ' ').charAt(0).toUpperCase()}</AvatarFallback></Avatar>
                   <h3 className="text-lg font-semibold truncate">{selectedChat.type === 'CONVERSATION' ? selectedChat.contactName : (selectedChat.visitorName || 'Visitante Anônimo')}</h3>
                 </div>
