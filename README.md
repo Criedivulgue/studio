@@ -1,3 +1,16 @@
+# Estado Atual do Sistema (Junho 2024)
+
+**Funcionalidade do Chat: ESTÁVEL**
+
+Após um período de instabilidade onde as respostas da IA não eram exibidas no widget do cliente, o problema foi diagnosticado e corrigido. A causa raiz era a ausência de um campo `timestamp` nas mensagens criadas pela Cloud Function, que eram subsequentemente filtradas pela query do frontend.
+
+- **Chat do Cliente (Visitante):** Totalmente funcional.
+- **Painel de Chat (Admin/Superadmin):** Totalmente funcional.
+
+O sistema está operando conforme o esperado.
+
+---
+
 # Convenções do Projeto
 
 ## Idioma
@@ -114,8 +127,9 @@ Esta é a parte mais crítica e a fonte do nosso bug anterior.
 
 -   **Início da Conversa:** Um `Visitor` anónimo é criado. Um novo documento é criado em `/chatSessions`, que armazena o `visitorId` (o `uid` anónimo) e o `adminId` a quem a conversa pertence.
 -   **Troca de Mensagens:** Todas as mensagens (do visitante, da IA e do admin) são documentos dentro de uma subcoleção: `/chatSessions/{sessionId}/messages`. Cada documento de mensagem tem um `sender` (`'visitor'`, `'ai'`, `'admin'`) e o `text`.
--   **O Papel da IA:** A IA não é um "utilizador". É um serviço (provavelmente uma Cloud Function) que é acionado quando uma nova mensagem do visitante é criada. Ela lê o histórico da conversa, gera uma resposta e escreve um novo documento de mensagem na mesma subcoleção com `sender: 'ai'`.
--   **Intervenção do Admin:** O admin, a partir do seu dashboard, pode ler as conversas da coleção `/chatSessions` e escrever novas mensagens na subcoleção `/messages` com `sender: 'admin'`.
+-   **O Papel da IA:** A IA não é um "utilizador". É um serviço (Cloud Function) que é acionado quando uma nova mensagem do visitante é criada. Ela lê o histórico da conversa, gera uma resposta e escreve um novo documento de mensagem na mesma subcoleção com `sender: 'ai'`.
+-   **Intervenção do Admin:** O admin, a partir do seu dashboard (`src/components/chat.tsx`), pode ler as conversas da coleção `/chatSessions` e escrever novas mensagens na subcoleção `/messages` com `sender: 'admin'`.
+-   **Nota Técnica Crucial:** Para garantir a correta ordenação e visualização das mensagens em todos os clientes (visitante e admin), é **mandatório** que todos os documentos de mensagem incluam o campo `timestamp` com um `FieldValue.serverTimestamp()`. Queries que utilizam `orderBy('timestamp')` no frontend descartarão silenciosamente qualquer mensagem que não contenha este campo.
 
 ---
 
@@ -156,32 +170,3 @@ O botão fornece um método eficiente para o administrador compartilhar o link d
     2.  **Redirecionamento:** Imediatamente após a cópia bem-sucedida, `window.open(whatsappUrl, '_blank')` abre a URL do WhatsApp em uma nova aba, iniciando o compartilhamento.
 
 -   **Dependências:** O componente requer a biblioteca `react-icons` para o ícone do WhatsApp.
-### Condições da IA na fase I
-O sistema tem dois estágios distintos, exatamente como definido no seu arquivo types.ts:
-
-Estágio 1: A "Sala de Espera" (chatSessions)
-
-O que é: Uma conversa temporária com um visitante anônimo.
-Onde Fica: Na coleção chatSessions.
-O Problema Atual: É aqui que o nosso erro está. A função onNewVisitorMessage está falhando em responder ao visitante anônimo nesta "sala de espera".
-O "Histórico" aqui: É simples e de curto prazo. É apenas a sequência de mensagens dentro desta sessão específica para que a IA se lembre do que acabou de ser dito.
-Estágio 2: O "Arquivo Permanente" (conversations)
-
-O que é: Uma conversa permanente e identificada. Isso acontece depois que um lead é qualificado (por exemplo, através do "Lead Identification Modal").
-Onde Fica: Na coleção conversations, como você acabou de me mostrar.
-Seu Alerta Crucial: É AQUI que o seu alerta sobre "históricos resumidos" se aplica. O campo summary que existe na interface Conversation no types.ts é onde o resumo feito pelo administrador seria salvo para dar contexto à IA em futuras conversas com aquele cliente já conhecido.
-A Função Responsável: onNewConversationMessage (da nossa Fase 2).
-O Diagnóstico Final: Onde nos Perdemos e Onde Estamos Agora
-
-Minha falha, e o motivo do seu alerta correto, foi que eu estava misturando a lógica complexa do Estágio 2 (resumos, histórico de longo prazo) com o problema simples do Estágio 1 (responder a um novo visitante).
-
-O Foco Imediato e Exclusivo: Consertar o Estágio 1.
-
-Vamos ignorar completamente o Estágio 2 por enquanto. Nosso único objetivo agora é fazer a função onNewVisitorMessage funcionar corretamente dentro da coleção chatSessions.
-
-O plano de ação que propus anteriormente está correto para este escopo limitado. Vou reescrever o código da função para:
-
-Persona: Usar o Prompt Global no campo systemInstruction.
-Memória de Curto Prazo: Usar a lista de mensagens da sessão atual (chatSessions/{id}/messages) como history.
-Conhecimento: Combinar o Prompt Personalizado (a base de conhecimento) com a pergunta do usuário na chamada sendMessage.
-Esta abordagem resolve o erro 400 Bad Request e faz o "Atendente Automático" (Criêda) responder ao novo visitante de forma correta, sem tocar na lógica complexa do histórico de longo prazo.

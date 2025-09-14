@@ -1,15 +1,16 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Firestore, collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, getDocs, deleteDoc, writeBatch, where } from 'firebase/firestore';
+import { Firestore, collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, getDocs, deleteDoc, writeBatch, where, Timestamp } from 'firebase/firestore';
 import { Functions, httpsCallable } from 'firebase/functions';
 import { ensureFirebaseInitialized, getFirebaseInstances } from '@/lib/firebase';
+import ReactMarkdown from 'react-markdown';
 
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Send, MoreVertical, Sparkles, Trash2, Loader2, MessageSquare, Archive, UserPlus, Users, ArrowLeft, ZapOff } from 'lucide-react';
+import { Send, MoreVertical, Sparkles, Trash2, Loader2, MessageSquare, Archive, UserPlus, Users, ArrowLeft, ZapOff, Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -56,7 +57,6 @@ export function Chat({ user }: { user: PlatformUser }) {
     initFirebase();
   }, [toast]);
 
-  // Efeito para carregar os chats (identificados e anônimos)
   useEffect(() => {
     if (!adminId || !db) {
       if (db) setLoading(false);
@@ -206,15 +206,14 @@ export function Chat({ user }: { user: PlatformUser }) {
     if (!selectedChat || !functions) return;
     setIsProcessing(true);
     try {
-      const toggleAIChat = httpsCallable(functions, 'toggleAIChat');
-      const result = await toggleAIChat({ chatId: selectedChat.id, chatType: selectedChat.type });
-      const newState = (result.data as { newState: boolean }).newState;
-      toast({ title: 'Sucesso', description: `IA ${newState ? 'ativada' : 'desativada'} para este chat.` });
+        const toggleAIChat = httpsCallable(functions, 'toggleAIChat');
+        const result = await toggleAIChat({ sessionId: selectedChat.id, enabled: !isAIEnabled });
+        toast({ title: 'Sucesso', description: (result.data as any).message });
     } catch (error) {
-      console.error("Error toggling AI:", error);
-      toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível alterar o estado da IA.' });
+        console.error("Error toggling AI:", error);
+        toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível alterar o estado da IA.' });
     } finally {
-      setIsProcessing(false);
+        setIsProcessing(false);
     }
   };
 
@@ -278,7 +277,6 @@ export function Chat({ user }: { user: PlatformUser }) {
                         <Button variant="ghost" className="w-full justify-start text-destructive hover:text-destructive" onClick={() => setShowDeleteDialog(true)} disabled={isProcessing}><Trash2 className="mr-2 h-4 w-4"/>Deletar</Button>
                       </>
                     ) : (
-                      // MODIFICAÇÃO: Botão para abrir o modal de identificar/conectar
                       <Button variant="ghost" className="w-full justify-start" onClick={handleIdentifyModalOpen} disabled={isProcessing}>
                           <UserPlus className="mr-2 h-4 w-4"/>Identificar / Conectar
                       </Button>
@@ -286,13 +284,28 @@ export function Chat({ user }: { user: PlatformUser }) {
                   </div></PopoverContent>
                 </Popover>
               </div>
-              <ScrollArea className="flex-1 p-4 bg-background/50">{messages.map((msg) => (<div key={msg.id} className={cn("flex mb-4", msg.senderId === adminId ? "justify-end" : "justify-start")}><div className={cn("rounded-lg px-4 py-2 max-w-sm", msg.senderId === adminId ? "bg-primary text-primary-foreground" : "bg-muted")}>{msg.content}</div></div>))}<div ref={messagesEndRef} /></ScrollArea>
+              <ScrollArea className="flex-1 p-4 bg-background/50">
+                <div className="space-y-4">
+                  {messages.map((msg) => (
+                    <div key={msg.id} className={cn("flex items-end gap-2", msg.role === 'admin' ? "justify-end" : "justify-start")}>
+                      {msg.role !== 'admin' && (
+                        <Avatar className="h-8 w-8">
+                           <AvatarFallback>{msg.role === 'user' ? <Users className="h-4 w-4" /> : <Bot className="h-4 w-4" />}</AvatarFallback>
+                        </Avatar>
+                      )}
+                      <div className={cn("rounded-lg px-3 py-2 max-w-sm break-words prose dark:prose-invert", msg.role === 'admin' ? "bg-primary text-primary-foreground" : "bg-muted")}>
+                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div ref={messagesEndRef} />
+              </ScrollArea>
               <div className="p-4 border-t"><form onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }} className="flex items-center gap-4"><Input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="Digite sua mensagem..." autoComplete="off" disabled={isProcessing}/><Button type="submit" size="icon" disabled={!newMessage.trim() || isProcessing}><Send/></Button></form></div>
             </>
           ) : (<div className="flex flex-col items-center justify-center h-full text-muted-foreground bg-background/50"><MessageSquare className="h-12 w-12 mb-4"/><p className="text-lg">Selecione uma conversa</p><p className="text-sm mt-2">Seus chats ativos aparecerão aqui.</p></div>)}
         </main>
       </div>
-      {/* MODIFICAÇÃO: Passa a sessão selecionada (se for do tipo SESSION) para o modal */}
       {selectedChat?.type === 'SESSION' && <LeadIdentificationModal isOpen={isIdentifyModalOpen} onClose={() => setIdentifyModalOpen(false)} adminId={adminId} session={selectedChat} />}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>

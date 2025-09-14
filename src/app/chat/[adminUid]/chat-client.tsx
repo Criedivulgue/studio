@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { SendHorizonal, Bot, User as UserIcon, Loader2, X, AlertTriangle, Info } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import ReactMarkdown from 'react-markdown';
 
 import { ensureFirebaseInitialized, getFirebaseInstances } from "@/lib/firebase";
 import { signInAnonymously } from "firebase/auth";
@@ -46,7 +47,7 @@ export default function ChatClient({ adminUid }: ChatClientProps) {
   const [adminProfile, setAdminProfile] = useState<PublicProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
   
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const createSessionWithRetry = async (db: any, userId: string, anonymousVisitorId: string | null) => {
@@ -166,7 +167,10 @@ export default function ChatClient({ adminUid }: ChatClientProps) {
     const { db } = firebase;
     const messagesQuery = query(collection(db, `${sessionPath}/messages`), orderBy("timestamp"));
     const unsubscribe = onSnapshot(messagesQuery, 
-      (snapshot) => setMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Message)),
+      (snapshot) => {
+        const fetchedMessages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Message);
+        setMessages(fetchedMessages);
+      },
       (err) => {
         console.error("Erro ao escutar mensagens:", err);
         toast({ title: "Erro de Comunicação", variant: "destructive" });
@@ -176,9 +180,7 @@ export default function ChatClient({ adminUid }: ChatClientProps) {
   }, [sessionPath, firebase, toast]);
 
   useEffect(() => {
-    if (scrollAreaRef.current) {
-      scrollAreaRef.current.scrollTo({ top: scrollAreaRef.current.scrollHeight, behavior: 'smooth' });
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -248,7 +250,7 @@ export default function ChatClient({ adminUid }: ChatClientProps) {
         </Button>
       </header>
 
-      <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}><div className="space-y-6 max-w-4xl mx-auto">
+      <ScrollArea className="flex-1 p-4"><div className="space-y-6 max-w-4xl mx-auto">
         {messages.map((message) => (
           <div key={message.id} className={cn("flex items-start gap-4", message.role === "user" ? "justify-end" : "justify-start")}>
             {message.role !== "user" && (
@@ -260,13 +262,14 @@ export default function ChatClient({ adminUid }: ChatClientProps) {
                 </AvatarFallback>
               </Avatar>
             )}
-            <div className={cn("max-w-md rounded-xl px-4 py-3 text-sm", message.role === "user" ? "bg-primary text-primary-foreground" : (message.role === 'admin' ? "bg-amber-100 text-amber-900" : "bg-card"))}>
+            <div className={cn("max-w-md rounded-xl px-4 py-3 text-sm prose dark:prose-invert", message.role === "user" ? "bg-primary text-primary-foreground" : (message.role === 'admin' ? "bg-amber-100 text-amber-900" : "bg-card"))}>
               {message.role === 'admin' && <p className="text-xs font-bold text-amber-700 pb-1">{adminProfile?.displayName || 'Agente'}</p>}
-              {message.content}
+              <ReactMarkdown>{message.content}</ReactMarkdown>
             </div>
             {message.role === "user" && (<Avatar className="h-8 w-8"><AvatarFallback><UserIcon/></AvatarFallback></Avatar>)}
           </div>
         ))}
+        <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
 

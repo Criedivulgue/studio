@@ -12,84 +12,110 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 const db = admin.firestore();
 
-// =================================================================================
-// FUNÇÕES DE IA E CORE DO CHAT
-// =================================================================================
-
-// MODIFICAÇÃO: Nova função para pré-identificar o visitante
 exports.onChatSessionCreated = onDocumentCreated(
   { document: "chatSessions/{sessionId}", region: "southamerica-east1" },
   async (event) => {
     const snap = event.data;
-    if (!snap) {
-      console.log("No data associated with the event.");
-      return;
-    }
-
+    if (!snap) return;
     const sessionData = snap.data();
     const sessionId = event.params.sessionId;
-    const anonymousVisitorId = sessionData.anonymousVisitorId;
-
-    if (!anonymousVisitorId) {
-      console.log(`Sessão ${sessionId} criada sem um ID de visitante anônimo. Nenhuma ação necessária.`);
-      return;
-    }
-
-    console.log(`Sessão ${sessionId} criada com ID de visitante anônimo: ${anonymousVisitorId}. Buscando contato correspondente.`);
+    const { anonymousVisitorId } = sessionData;
+    if (!anonymousVisitorId) return;
 
     try {
-      const contactsRef = db.collection('contacts');
-      const querySnapshot = await contactsRef.where('anonymousVisitorIds', 'array-contains', anonymousVisitorId).limit(1).get();
-
-      if (querySnapshot.empty) {
-        console.log(`Nenhum contato encontrado para o ID de visitante anônimo: ${anonymousVisitorId}`);
-        return;
-      }
+      const querySnapshot = await db.collection('contacts').where('anonymousVisitorIds', 'array-contains', anonymousVisitorId).limit(1).get();
+      if (querySnapshot.empty) return;
 
       const contactDoc = querySnapshot.docs[0];
-      const contactId = contactDoc.id;
-      const contactName = contactDoc.data().name;
-
-      console.log(`Contato encontrado: ${contactName} (${contactId}). Atualizando a sessão de chat.`);
-
       await db.doc(`chatSessions/${sessionId}`).update({
-        probableContactId: contactId,
-        visitorName: `Provavelmente ${contactName}`
+        probableContactId: contactDoc.id,
+        visitorName: `Provavelmente ${contactDoc.data().name}`
       });
-
-      console.log(`Sessão ${sessionId} atualizada com o probableContactId: ${contactId}.`);
-
     } catch (error) {
-      console.error(`Erro ao processar a pré-identificação para a sessão ${sessionId}:`, error);
+      console.error(`Erro na pré-identificação para sessão ${sessionId}:`, error);
     }
   }
 );
 
 exports.onNewVisitorMessage = onDocumentCreated(
   { document: "chatSessions/{sessionId}/messages/{messageId}", region: "southamerica-east1", secrets: ["GEMINI_API_KEY"] },
-  async (event) => { /* ...código inalterado... */ }
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const newMessage = snap.data();
+    if (newMessage.role !== 'user') return;
+
+    const sessionId = event.params.sessionId;
+    const sessionRef = db.doc(`chatSessions/${sessionId}`);
+
+    try {
+      await db.runTransaction(async (t) => {
+        const sessionDoc = await t.get(sessionRef);
+        if (!sessionDoc.exists) throw new Error("Session not found");
+        const data = sessionDoc.data();
+        if(data.aiEnabled === false) throw new Error("AI_DISABLED");
+        if (data.aiProcessing) throw new Error("AI_PROCESSING_LOCKED");
+        t.update(sessionRef, { aiProcessing: true });
+      });
+    } catch (error) {
+      if (error.message === "AI_PROCESSING_LOCKED" || error.message === "AI_DISABLED") return;
+      console.error(`Erro ao adquirir lock para ${sessionId}:`, error);
+      return;
+    }
+
+    try {
+        const sessionDoc = await sessionRef.get();
+        if (!sessionDoc.exists) throw new Error(`Sessão ${sessionId} não encontrada.`);
+        const sessionData = sessionDoc.data();
+        if (!sessionData.adminId) throw new Error(`AdminId não encontrado na sessão ${sessionId}`);
+
+        const globalAiSettingsDoc = await db.doc('system_settings/ai_global').get();
+        const globalPrompt = globalAiSettingsDoc.data()?.prompt || "Você é um assistente prestativo.";
+        const adminUserDoc = await db.doc(`users/${sessionData.adminId}`).get();
+        const knowledgeBase = adminUserDoc.data()?.aiPrompt || "";
+
+        const messagesRef = sessionRef.collection("messages");
+        const messagesSnapshot = await messagesRef.orderBy("timestamp", "asc").limit(20).get();
+        const history = messagesSnapshot.docs.map(doc => ({ role: doc.data().role === 'user' ? 'user' : 'model', parts: [{ text: doc.data().content }] }));
+        history.pop();
+
+        const chat = model.startChat({ history, systemInstruction: { parts: [{ text: globalPrompt }] } });
+        const fullPrompt = `USANDO O DOCUMENTO DE CONHECIMENTO ABAIXO, responda a pergunta.\n---\nDOCUMENTO:${knowledgeBase}\n---\nPERGUNTA:${newMessage.content}`;
+        const result = await chat.sendMessage(fullPrompt);
+        const response = await result.response;
+        const aiResponseText = response.text().trim();
+
+        await messagesRef.add({ content: aiResponseText, role: 'assistant', senderId: 'ai_assistant', timestamp: admin.firestore.FieldValue.serverTimestamp(), read: false });
+    } catch (error) {
+        console.error(`Erro no processamento da IA para ${sessionId}:`, error);
+    } finally {
+        await sessionRef.update({ aiProcessing: false });
+    }
+  }
 );
 
-// =================================================================================
-// FUNÇÕES DE GESTÃO DE CHATS E CONTATOS (Chamáveis pela Interface)
-// =================================================================================
-
 exports.toggleAIChat = onCall({ region: "southamerica-east1" }, async (request) => {
-  /* ...código inalterado... */
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Usuário não autenticado.');
+  const { sessionId, enabled } = request.data;
+  if (!sessionId || typeof enabled !== 'boolean') throw new HttpsError('invalid-argument', 'Argumentos inválidos.');
+  const adminId = request.auth.uid;
+  const sessionRef = db.doc(`chatSessions/${sessionId}`);
+  try {
+    const doc = await sessionRef.get();
+    if (!doc.exists || doc.data().adminId !== adminId) throw new HttpsError('not-found', 'Sessão não encontrada.');
+    await sessionRef.update({ aiEnabled: enabled });
+    return { success: true, message: `IA ${enabled ? 'ativada' : 'desativada'}.` };
+  } catch (error) {
+    console.error(`Erro em toggleAIChat para ${sessionId}:`, error);
+    throw new HttpsError('internal', 'Erro ao alterar estado da IA.');
+  }
 });
 
 exports.identifyLead = onCall({ region: "southamerica-east1" }, async (request) => {
-  if (!request.auth) {
-    throw new HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
-  }
+  if (!request.auth) throw new HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
   const { sessionId, adminId, contactData } = request.data;
-  const callingAdminId = request.auth.uid;
-  if (callingAdminId !== adminId) {
-    throw new HttpsError('permission-denied', 'Você não tem autorização para realizar esta ação.');
-  }
-  if (!sessionId || !contactData || !contactData.name || !contactData.email) {
-    throw new HttpsError('invalid-argument', 'Faltam dados obrigatórios: sessionId e contactData (name, email).');
-  }
+  if (request.auth.uid !== adminId) throw new HttpsError('permission-denied', 'Você não tem autorização.');
+  if (!sessionId || !contactData?.name || !contactData?.email) throw new HttpsError('invalid-argument', 'Faltam dados obrigatórios.');
 
   const sessionRef = db.doc(`chatSessions/${sessionId}`);
   const newContactRef = db.collection('contacts').doc();
@@ -97,134 +123,142 @@ exports.identifyLead = onCall({ region: "southamerica-east1" }, async (request) 
   const anonymousVisitorId = db.collection('contacts').doc().id;
 
   try {
-    await db.runTransaction(async (transaction) => {
-      const sessionDoc = await transaction.get(sessionRef);
+    await db.runTransaction(async (t) => {
+      const sessionDoc = await t.get(sessionRef);
       if (!sessionDoc.exists) throw new HttpsError('not-found', `Sessão ${sessionId} não encontrada.`);
       const sessionData = sessionDoc.data();
-      
-      const newContactPayload = {
-        ...contactData,
-        id: newContactRef.id, ownerId: adminId, status: 'active', createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        lastInteraction: sessionData.lastMessageTimestamp || admin.firestore.FieldValue.serverTimestamp(),
-        anonymousVisitorIds: [anonymousVisitorId],
-      };
-      transaction.set(newContactRef, newContactPayload);
-      
-      transaction.set(newConversationRef, {
-        id: newConversationRef.id, adminId: adminId, contactId: newContactRef.id, status: 'active', aiEnabled: true,
-        createdAt: sessionData.createdAt, lastMessage: sessionData.lastMessage || '', lastMessageTimestamp: sessionData.lastMessageTimestamp,
-        unreadCount: 0, contactName: contactData.name, contactAvatar: contactData.avatar || '',
-      });
+      const newContactPayload = { ...contactData, id: newContactRef.id, ownerId: adminId, status: 'active', createdAt: admin.firestore.FieldValue.serverTimestamp(), lastInteraction: sessionData.lastMessageTimestamp || admin.firestore.FieldValue.serverTimestamp(), anonymousVisitorIds: [anonymousVisitorId] };
+      t.set(newContactRef, newContactPayload);
+      t.set(newConversationRef, { id: newConversationRef.id, adminId, contactId: newContactRef.id, status: 'active', createdAt: sessionData.createdAt, lastMessage: sessionData.lastMessage || '', lastMessageTimestamp: sessionData.lastMessageTimestamp, unreadCount: 0, contactName: contactData.name, contactAvatar: contactData.avatar || '', aiEnabled: sessionData.aiEnabled ?? true });
     });
 
-    console.log(`Transação bem-sucedida. Contato ${newContactRef.id} e Conversa ${newConversationRef.id} criados.`);
-    
-    const messagesRef = sessionRef.collection('messages');
-    const messagesSnapshot = await messagesRef.get();
-    const writeBatch = db.batch();
+    const messagesSnapshot = await sessionRef.collection('messages').get();
+    const batch = db.batch();
     if (!messagesSnapshot.empty) {
-      messagesSnapshot.docs.forEach(msgDoc => {
-        const newMsgRef = newConversationRef.collection('messages').doc(msgDoc.id);
-        writeBatch.set(newMsgRef, msgDoc.data());
-        writeBatch.delete(msgDoc.ref);
+      messagesSnapshot.docs.forEach(doc => {
+        batch.set(newConversationRef.collection('messages').doc(doc.id), doc.data());
+        batch.delete(doc.ref);
       });
     }
-    writeBatch.delete(sessionRef);
-    await writeBatch.commit();
-    
-    console.log(`Chat migrado e sessão ${sessionId} apagada com sucesso.`);
-    return { status: 'success', conversationId: newConversationRef.id, contactId: newContactRef.id, anonymousVisitorId: anonymousVisitorId };
+    batch.delete(sessionRef);
+    await batch.commit();
+    return { status: 'success', conversationId: newConversationRef.id, contactId: newContactRef.id, anonymousVisitorId };
   } catch (error) {
-    console.error(`Erro em identifyLead para a sessão ${sessionId}:`, error);
-    if (error instanceof HttpsError) throw error;
+    console.error(`Erro em identifyLead para ${sessionId}:`, error);
     throw new HttpsError('internal', 'Ocorreu um erro ao migrar o chat.');
   }
 });
 
-exports.searchContacts = onCall({ region: "southamerica-east1" }, async (request) => {
-  /* ...código inalterado... */
-});
-
 exports.connectSessionToContact = onCall({ region: "southamerica-east1" }, async (request) => {
-    if (!request.auth) throw new HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Usuário não autenticado.');
     const adminId = request.auth.uid;
     const { sessionId, contactId } = request.data;
-    if (!sessionId || !contactId) throw new HttpsError('invalid-argument', 'Faltam dados obrigatórios: sessionId e contactId.');
+    if (!sessionId || !contactId) throw new HttpsError('invalid-argument', 'Argumentos inválidos.');
 
     const sessionRef = db.doc(`chatSessions/${sessionId}`);
     const contactRef = db.doc(`contacts/${contactId}`);
     const anonymousVisitorId = db.collection('contacts').doc().id;
     
     try {
-        const sessionDoc = await sessionRef.get();
-        if (!sessionDoc.exists) throw new HttpsError('not-found', `Sessão ${sessionId} não encontrada.`);
+        const [sessionDoc, contactDoc] = await Promise.all([sessionRef.get(), contactRef.get()]);
+        if (!sessionDoc.exists || sessionDoc.data().adminId !== adminId) throw new HttpsError('not-found', 'Sessão não encontrada ou sem permissão.');
+        if (!contactDoc.exists || contactDoc.data().ownerId !== adminId) throw new HttpsError('not-found', 'Contato não encontrado ou sem permissão.');
+        
         const sessionData = sessionDoc.data();
-        if(sessionData.adminId !== adminId) throw new HttpsError('permission-denied', 'Você não é o proprietário desta sessão.');
-
-        const contactDoc = await contactRef.get();
-        if (!contactDoc.exists || contactDoc.data().ownerId !== adminId) throw new HttpsError('not-found', `Contato ${contactId} não encontrado.`);
         const contactData = contactDoc.data();
-
-        const activeConvoQuery = db.collection('conversations').where('contactId', '==', contactId).where('status', '==', 'active').limit(1);
-        const activeConvoSnap = await activeConvoQuery.get();
-        let targetConversationRef;
-
+        const activeConvoSnap = await db.collection('conversations').where('contactId', '==', contactId).where('status', '==', 'active').limit(1).get();
+        const targetConversationRef = activeConvoSnap.empty ? db.collection('conversations').doc() : activeConvoSnap.docs[0].ref;
+        const batch = db.batch();
         if (activeConvoSnap.empty) {
-            targetConversationRef = db.collection('conversations').doc();
-            await targetConversationRef.set({
-                id: targetConversationRef.id, adminId: adminId, contactId: contactId, status: 'active', aiEnabled: true, createdAt: sessionData.createdAt,
-                lastMessage: sessionData.lastMessage || '', lastMessageTimestamp: sessionData.lastMessageTimestamp, unreadCount: 0,
-                contactName: contactData.name, contactAvatar: contactData.avatar || '',
-            });
-        } else {
-            targetConversationRef = activeConvoSnap.docs[0].ref;
-            await targetConversationRef.update({ lastMessage: sessionData.lastMessage || '', lastMessageTimestamp: sessionData.lastMessageTimestamp });
+            batch.set(targetConversationRef, { id: targetConversationRef.id, adminId, contactId, status: 'active', createdAt: sessionData.createdAt, lastMessage: sessionData.lastMessage, lastMessageTimestamp: sessionData.lastMessageTimestamp, unreadCount: 0, contactName: contactData.name, contactAvatar: contactData.avatar || '', aiEnabled: sessionData.aiEnabled ?? true });
         }
-
-        const messagesRef = sessionRef.collection('messages');
-        const messagesSnapshot = await messagesRef.get();
-        const writeBatch = db.batch();
-        writeBatch.update(contactRef, { anonymousVisitorIds: admin.firestore.FieldValue.arrayUnion(anonymousVisitorId) });
-
+        const messagesSnapshot = await sessionRef.collection('messages').get();
         if (!messagesSnapshot.empty) {
-            messagesSnapshot.docs.forEach(msgDoc => {
-                const newMsgRef = targetConversationRef.collection('messages').doc(msgDoc.id);
-                writeBatch.set(newMsgRef, msgDoc.data());
-                writeBatch.delete(msgDoc.ref);
+            messagesSnapshot.docs.forEach(doc => {
+                batch.set(targetConversationRef.collection('messages').doc(doc.id), doc.data());
+                batch.delete(doc.ref);
             });
         }
-
-        writeBatch.delete(sessionRef);
-        await writeBatch.commit();
-
-        console.log(`Sessão ${sessionId} conectada ao contato ${contactId} com sucesso.`);
-        return { status: 'success', conversationId: targetConversationRef.id, anonymousVisitorId: anonymousVisitorId };
+        batch.update(contactRef, { anonymousVisitorIds: admin.firestore.FieldValue.arrayUnion(anonymousVisitorId) });
+        batch.delete(sessionRef);
+        await batch.commit();
+        return { status: 'success', conversationId: targetConversationRef.id, anonymousVisitorId };
     } catch (error) {
-        console.error(`Erro em connectSessionToContact para a sessão ${sessionId}:`, error);
-        if (error instanceof HttpsError) throw error;
-        throw new HttpsError('internal', 'Ocorreu um erro ao conectar a sessão ao contato.');
+        console.error(`Erro em connectSessionToContact para ${sessionId}:`, error);
+        throw new HttpsError('internal', 'Ocorreu um erro ao conectar a sessão.');
     }
 });
 
-
-// =================================================================================
-// FUNÇÕES DE ARQUIVAMENTO E LIMPEZA
-// =================================================================================
+exports.searchContacts = onCall({ region: "southamerica-east1" }, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Usuário não autenticado.');
+    const { searchTerm } = request.data;
+    const adminId = request.auth.uid;
+    if (!searchTerm) return { contacts: [] };
+    try {
+        const contactsRef = db.collection('contacts');
+        const query = contactsRef.where('ownerId', '==', adminId).orderBy('name');
+        const snapshot = await query.get();
+        const lowerCaseSearchTerm = searchTerm.toLowerCase();
+        const contacts = snapshot.docs.map(doc => doc.data()).filter(c => c.name.toLowerCase().includes(lowerCaseSearchTerm) || (c.email && c.email.toLowerCase().includes(lowerCaseSearchTerm)));
+        return { contacts };
+    } catch (error) {
+        console.error('Erro ao buscar contatos:', error);
+        throw new HttpsError('internal', 'Erro ao buscar contatos.');
+    }
+});
 
 exports.archiveAndSummarizeConversation = onCall({ region: "southamerica-east1", secrets: ["GEMINI_API_KEY"] }, async (request) => {
-    /* ...código inalterado... */
-  }
-);
+    if (!request.auth) throw new HttpsError("unauthenticated", "A função deve ser chamada por um usuário autenticado.");
+    const { conversationId, contactId } = request.data;
+    const adminId = request.auth.uid;
+    if (!conversationId || !contactId) throw new HttpsError("invalid-argument", "Faltam dados obrigatórios: conversationId e contactId.");
+
+    const convoRef = db.doc(`conversations/${conversationId}`);
+    const contactRef = db.doc(`contacts/${contactId}`);
+    try {
+        const convoDoc = await convoRef.get();
+        if (!convoDoc.exists || convoDoc.data().adminId !== adminId) throw new HttpsError("permission-denied", "Você não é o proprietário desta conversa.");
+
+        const messagesSnapshot = await convoRef.collection("messages").orderBy("timestamp", "asc").get();
+        let summaryText = "Nenhuma mensagem nesta conversa.";
+        if (!messagesSnapshot.empty) {
+            const history = messagesSnapshot.docs.map(doc => `${doc.data().role}: ${doc.data().content}`).join("\n");
+            const prompt = `Por favor, resuma a seguinte conversa. O resumo deve ser conciso, em português, com no máximo 2 frases, capturando o motivo principal do contato e a resolução. CONVERSAÇÃO:\n\n${history}`;
+            const result = await model.generateContent(prompt);
+            summaryText = (await result.response).text().trim();
+        }
+
+        const batch = db.batch();
+        batch.update(convoRef, { status: "archived", summary: summaryText, archivedAt: admin.firestore.FieldValue.serverTimestamp() });
+        batch.update(contactRef, { lastInteraction: admin.firestore.FieldValue.serverTimestamp() });
+        await batch.commit();
+        return { status: "success", summary: summaryText };
+    } catch (error) { console.error(`Erro ao arquivar a conversa ${conversationId}:`, error); throw new HttpsError("internal", "Erro ao arquivar a conversa."); }
+});
 
 exports.cleanupOldChatSessions = onSchedule({ schedule: "every 24 hours", region: "southamerica-east1" }, async (event) => {
-    /* ...código inalterado... */
-  }
-);
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const oldSessionsQuery = db.collection("chatSessions").where("lastMessageTimestamp", "<", admin.firestore.Timestamp.fromDate(thirtyDaysAgo));
+    try {
+        const snapshot = await oldSessionsQuery.get();
+        if (snapshot.empty) return null;
+        const promises = snapshot.docs.map(doc => deleteCollection(doc.ref.collection("messages"), 100).then(() => doc.ref.delete()));
+        await Promise.all(promises);
+        return { status: "success", deletedCount: snapshot.size };
+    } catch (error) { console.error("Erro durante a limpeza das sessões de chat:", error); throw new Error("Falha ao limpar sessões antigas."); }
+});
 
-// =================================================================================
-// FUNÇÕES HELPERS
-// =================================================================================
+async function deleteCollection(collectionRef, batchSize) {
+    const query = collectionRef.orderBy("__name__").limit(batchSize);
+    return new Promise((resolve, reject) => { deleteQueryBatch(query, resolve).catch(reject); });
+}
 
-async function deleteCollection(collectionRef, batchSize) { /* ...código inalterado... */ }
-
-async function deleteQueryBatch(query, resolve) { /* ...código inalterado... */ }
+async function deleteQueryBatch(query, resolve) {
+    const snapshot = await query.get();
+    if (snapshot.size === 0) return resolve();
+    const batch = db.batch();
+    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+    process.nextTick(() => { deleteQueryBatch(query, resolve); });
+}
