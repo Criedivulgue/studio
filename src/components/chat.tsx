@@ -57,6 +57,7 @@ export function Chat({ user }: { user: PlatformUser }) {
     initFirebase();
   }, [toast]);
 
+  // CORREÇÃO: Removido selectedChat das dependências para evitar re-subscriptions desnecessárias.
   useEffect(() => {
     if (!adminId || !db) {
       if (db) setLoading(false);
@@ -68,6 +69,13 @@ export function Chat({ user }: { user: PlatformUser }) {
     const unsubscribeSessions = onSnapshot(sessionsQuery, (snapshot) => {
       const sessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ChatSession));
       setAnonymousChats(sessions);
+      // CORREÇÃO: Se um chat de sessão estiver selecionado, atualiza seus dados.
+      if (selectedChat?.type === 'SESSION') {
+        const updatedChat = sessions.find(s => s.id === selectedChat.id);
+        if (updatedChat) {
+          setSelectedChat({ ...updatedChat, type: 'SESSION' });
+        }
+      }
       setLoading(false);
     }, (error) => {
       console.error("Error listening to chat sessions:", error);
@@ -77,13 +85,14 @@ export function Chat({ user }: { user: PlatformUser }) {
     const convosQuery = query(collection(db, "conversations"), where("adminId", "==", adminId), orderBy('lastMessageTimestamp', 'desc'));
     const unsubscribeConvos = onSnapshot(convosQuery, (snapshot) => {
       const convos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Conversation));
-      if (selectedChat) {
-          const updatedChat = convos.find(c => c.id === selectedChat.id);
-          if (updatedChat) {
-              setSelectedChat({ ...updatedChat, type: 'CONVERSATION' });
-          }
-      }
       setIdentifiedChats(convos.filter(c => c.status !== 'archived'));
+      // CORREÇÃO: Se um chat de conversação estiver selecionado, atualiza seus dados.
+      if (selectedChat?.type === 'CONVERSATION') {
+        const updatedChat = convos.find(c => c.id === selectedChat.id);
+        if (updatedChat) {
+            setSelectedChat({ ...updatedChat, type: 'CONVERSATION' });
+        }
+      }
       setLoading(false);
     }, (error) => {
       console.error("Error listening to conversations:", error);
@@ -94,7 +103,7 @@ export function Chat({ user }: { user: PlatformUser }) {
       unsubscribeSessions();
       unsubscribeConvos();
     };
-  }, [adminId, db, toast, selectedChat]);
+  }, [adminId, db, toast]); // selectedChat removido daqui
 
 
   useEffect(() => {
@@ -222,6 +231,7 @@ export function Chat({ user }: { user: PlatformUser }) {
   }
   
   const isLoading = loading || !db || !functions;
+  // A lógica do isAIEnabled depende do selectedChat ser atualizado corretamente.
   const isAIEnabled = selectedChat?.aiEnabled !== false;
 
   return (

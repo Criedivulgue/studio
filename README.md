@@ -1,13 +1,32 @@
-# Estado Atual do Sistema (Junho 2024)
+# Estado Atual do Sistema (Pós-Normalização)
 
-**Funcionalidade do Chat: ESTÁVEL**
+**Funcionalidade Geral: ESTÁVEL E ROBUSTO**
 
-Após um período de instabilidade onde as respostas da IA não eram exibidas no widget do cliente, o problema foi diagnosticado e corrigido. A causa raiz era a ausência de um campo `timestamp` nas mensagens criadas pela Cloud Function, que eram subsequentemente filtradas pela query do frontend.
+O sistema passou por uma fase de normalização crucial, focada em alinhar as implementações de frontend e backend para garantir a funcionalidade completa das notificações em tempo real e o controle do administrador sobre a IA. O chat, que já estava estável, permanece totalmente funcional.
 
-- **Chat do Cliente (Visitante):** Totalmente funcional.
-- **Painel de Chat (Admin/Superadmin):** Totalmente funcional.
+---
 
-O sistema está operando conforme o esperado.
+### Melhorias Implementadas
+
+#### 1. Sistema de Notificação (NORMALIZADO E FUNCIONAL)
+
+*   **Problema:** O administrador não recebia notificações push quando um visitante enviava uma nova mensagem.
+
+*   **Diagnóstico:** Foi identificado um desencontro de contrato entre o frontend e o backend. O backend (`functions/index.js`) esperava um *array* no campo `fcmTokens` (plural), enquanto o frontend (`src/hooks/useFirebaseMessaging.js`) salvava uma *string* no campo `fcmToken` (singular).
+
+*   **Solução:** A lógica do frontend foi corrigida para usar `arrayUnion`, alinhando-se ao contrato do backend. Nenhuma alteração foi necessária no backend.
+
+*   **Resultado:** O sistema de notificação está **totalmente funcional**. Administradores recebem alertas em tempo real para novas mensagens.
+
+#### 2. Controle da IA no Chat (CORRIGIDO E FUNCIONAL)
+
+*   **Problema:** O botão "Ativar/Desativar IA" no painel de chat não funcionava como um interruptor. Após desativar a IA, não era possível reativá-la pela interface.
+
+*   **Diagnóstico:** O problema era um bug de estado obsoleto (*stale state*) no frontend. O componente de chat (`src/components/chat.tsx`) não atualizava sua visão interna (`selectedChat`) após a alteração ser confirmada no banco de dados. Como resultado, a interface sempre "pensava" que a IA estava ativa e só oferecia a opção de desativar.
+
+*   **Solução:** Foi implementada uma correção cirúrgica no `useEffect` que escuta as atualizações das listas de chats. Agora, sempre que uma alteração ocorre no banco de dados, o estado `selectedChat` é forçosamente atualizado com os dados mais recentes, garantindo que a interface sempre reflita o estado real.
+
+*   **Resultado:** O controle da IA **funciona perfeitamente**. O administrador pode ativar e desativar a participação da IA em qualquer conversa com um clique, e a interface responderá corretamente, mostrando sempre a ação apropriada (Ativar ou Desativar).
 
 ---
 

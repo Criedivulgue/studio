@@ -1,8 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
-import { doc, setDoc } from 'firebase/firestore';
-// CORREÇÃO: Importar o inicializador do Firebase em vez de 'db'
+import { doc, setDoc, arrayUnion } from 'firebase/firestore'; // Importa arrayUnion
 import { ensureFirebaseInitialized, getFirebaseInstances } from '@/lib/firebase'; 
 import { useAuth } from './use-auth';
 
@@ -13,13 +12,14 @@ export function useFirebaseMessaging() {
   const [messaging, setMessaging] = useState(null);
   const [notificationPermission, setNotificationPermission] = useState(null);
 
-  // CORREÇÃO: Inicializar o Firebase e obter as instâncias
   useEffect(() => {
     const initializeFirebase = async () => {
       await ensureFirebaseInitialized();
       const { messaging: firebaseMessaging } = getFirebaseInstances();
       setMessaging(firebaseMessaging);
-      setNotificationPermission(Notification.permission);
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        setNotificationPermission(Notification.permission);
+      }
     };
 
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
@@ -29,7 +29,7 @@ export function useFirebaseMessaging() {
 
   useEffect(() => {
     if (!messaging || !user || !user.uid) {
-      return; // Sai se o messaging ou o usuário não estiverem prontos
+      return; 
     }
 
     const requestPermissionAndGetToken = async () => {
@@ -47,11 +47,13 @@ export function useFirebaseMessaging() {
 
           if (currentToken) {
             console.log('Token FCM obtido:', currentToken);
-            // CORREÇÃO: Obter instância do DB aqui dentro, quando for necessária
             const { db } = getFirebaseInstances(); 
             const userDocRef = doc(db, 'users', user.uid);
-            await setDoc(userDocRef, { fcmToken: currentToken }, { merge: true });
-            console.log('Token FCM salvo no Firestore.');
+            
+            // CORREÇÃO: Usa arrayUnion para adicionar o token ao array 'fcmTokens'
+            await setDoc(userDocRef, { fcmTokens: arrayUnion(currentToken) }, { merge: true });
+            
+            console.log('Token FCM salvo/atualizado no Firestore no formato de array.');
           } else {
             console.log('Não foi possível obter o token FCM.');
           }
@@ -69,7 +71,7 @@ export function useFirebaseMessaging() {
     });
 
     return () => unsubscribe();
-  }, [user, messaging, notificationPermission]); // Depende do user, messaging e da permissão
+  }, [user, messaging, notificationPermission]);
 
   return { notificationPermission };
 }

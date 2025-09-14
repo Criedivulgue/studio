@@ -48,6 +48,55 @@ exports.onNewVisitorMessage = onDocumentCreated(
     const sessionId = event.params.sessionId;
     const sessionRef = db.doc(`chatSessions/${sessionId}`);
 
+    // --- LÓGICA DE NOTIFICAÇÃO ---
+    try {
+      const sessionDoc = await sessionRef.get();
+      if (!sessionDoc.exists) return;
+      const sessionData = sessionDoc.data();
+      const adminId = sessionData.adminId;
+      if (!adminId) return;
+
+      const adminUserDoc = await db.doc(`users/${adminId}`).get();
+      if (!adminUserDoc.exists) return;
+      const fcmTokens = adminUserDoc.data()?.fcmTokens;
+
+      if (fcmTokens && Array.isArray(fcmTokens) && fcmTokens.length > 0) {
+        const visitorName = sessionData.visitorName || 'Visitante Anônimo';
+        const payload = {
+          notification: {
+            title: `Nova mensagem de ${visitorName}`,
+            body: newMessage.content,
+            icon: '/favicon.ico',
+          },
+          webpush: {
+            fcm_options: {
+              link: `/admin/live-chat?chatId=${sessionId}`
+            }
+          }
+        };
+
+        const response = await admin.messaging().sendToDevice(fcmTokens, payload);
+        const tokensToRemove = [];
+        response.results.forEach((result, index) => {
+          const error = result.error;
+          if (error) {
+            console.error('Falha ao enviar notificação para', fcmTokens[index], error);
+            if (error.code === 'messaging/invalid-registration-token' || error.code === 'messaging/registration-token-not-registered') {
+              tokensToRemove.push(fcmTokens[index]);
+            }
+          }
+        });
+
+        if (tokensToRemove.length > 0) {
+          await adminUserDoc.ref.update({ fcmTokens: admin.firestore.FieldValue.arrayRemove(...tokensToRemove) });
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao enviar notificação:", error);
+    }
+    // --- FIM DA LÓGICA DE NOTIFICAÇÃO ---
+
+    // --- LÓGICA DE PROCESSAMENTO DA IA ---
     try {
       await db.runTransaction(async (t) => {
         const sessionDoc = await t.get(sessionRef);
