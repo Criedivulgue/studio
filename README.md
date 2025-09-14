@@ -1,3 +1,12 @@
+# O WhatsAI
+"O Complemento para seu WhatsApp Profissional."
+
+Essa frase é muito mais do que um slogan. É a estratégia de produto inteira em cinco palavras. Ela define o que o WhatsAi é e, mais importante, o que ele não é.
+
+Não é um substituto do WhatsApp.
+Não é uma ferramenta de chat genérica.
+É o que transforma o WhatsApp de uma ferramenta de mensagens caótica em um canal de negócios organizado e poderoso.
+
 # Estado Atual do Sistema (Pós-Normalização)
 
 **Funcionalidade Geral: ESTÁVEL E ROBUSTO**

@@ -13,27 +13,84 @@ const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 const db = admin.firestore();
 
 exports.onChatSessionCreated = onDocumentCreated(
-  { document: "chatSessions/{sessionId}", region: "southamerica-east1" },
+  { document: "chatSessions/{sessionId}", region: "southamerica-east1", secrets: ["GEMINI_API_KEY"] },
   async (event) => {
     const snap = event.data;
     if (!snap) return;
     const sessionData = snap.data();
     const sessionId = event.params.sessionId;
-    const { anonymousVisitorId } = sessionData;
-    if (!anonymousVisitorId) return;
+    const { adminId, anonymousVisitorId } = sessionData;
 
-    try {
-      const querySnapshot = await db.collection('contacts').where('anonymousVisitorIds', 'array-contains', anonymousVisitorId).limit(1).get();
-      if (querySnapshot.empty) return;
+    // Lógica encapsulada para enviar a mensagem de boas-vindas da IA
+    const sendWelcomeMessage = async () => {
+      if (!adminId) {
+        console.log(`[Welcome] No adminId for session ${sessionId}, skipping.`);
+        return;
+      }
 
-      const contactDoc = querySnapshot.docs[0];
-      await db.doc(`chatSessions/${sessionId}`).update({
-        probableContactId: contactDoc.id,
-        visitorName: `Provavelmente ${contactDoc.data().name}`
-      });
-    } catch (error) {
-      console.error(`Erro na pré-identificação para sessão ${sessionId}:`, error);
-    }
+      // Delay de 3 segundos para humanizar a interação
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      const messagesRef = db.collection(`chatSessions/${sessionId}/messages`);
+      const messagesSnapshot = await messagesRef.limit(1).get();
+      if (!messagesSnapshot.empty) {
+        console.log(`[Welcome] Session ${sessionId} already has messages, skipping.`);
+        return;
+      }
+
+      try {
+        const adminUserDoc = await db.doc(`users/${adminId}`).get();
+        const knowledgeBase = adminUserDoc.data()?.aiPrompt || "";
+        // A instrução global já é pega pela IA, focamos no prompt específico
+        const systemInstruction = knowledgeBase;
+
+        const chat = model.startChat({
+            systemInstruction: { parts: [{ text: systemInstruction }] }
+        });
+
+        // Prompt simples para a IA iniciar a conversa
+        const welcomePrompt = "Inicie a conversa com uma saudação de boas-vindas. Apresente-se brevemente com base na sua personalidade e pergunte como pode ajudar.";
+        const result = await chat.sendMessage(welcomePrompt);
+        const response = await result.response;
+        const aiResponseText = response.text().trim();
+
+        if (aiResponseText) {
+          await messagesRef.add({
+            content: aiResponseText,
+            role: 'assistant',
+            senderId: 'ai_assistant',
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            read: false,
+          });
+          console.log(`[Welcome] AI Welcome message sent for session ${sessionId}.`);
+        }
+      } catch (error) {
+        console.error(`[Welcome] Error sending AI welcome message for ${sessionId}:`, error);
+      }
+    };
+
+    // Lógica encapsulada para pré-identificar o contato
+    const preIdentifyContact = async () => {
+      if (!anonymousVisitorId) {
+        console.log(`[Identify] No anonymousVisitorId for session ${sessionId}, skipping.`);
+        return;
+      }
+      try {
+        const querySnapshot = await db.collection('contacts').where('anonymousVisitorIds', 'array-contains', anonymousVisitorId).limit(1).get();
+        if (querySnapshot.empty) return;
+        const contactDoc = querySnapshot.docs[0];
+        await db.doc(`chatSessions/${sessionId}`).update({
+          probableContactId: contactDoc.id,
+          visitorName: `Provavelmente ${contactDoc.data().name}`
+        });
+        console.log(`[Identify] Pre-identified contact ${contactDoc.id} for session ${sessionId}.`);
+      } catch (error) {
+        console.error(`[Identify] Error in pre-identification for session ${sessionId}:`, error);
+      }
+    };
+
+    // Executa ambas as lógicas em paralelo para não bloquear uma à outra
+    await Promise.all([sendWelcomeMessage(), preIdentifyContact()]);
   }
 );
 

@@ -56,3 +56,7 @@ Este documento rastreia as próximas funcionalidades a serem implementadas para 
 Vamos inseri no Chat do cliente um botão "Voltar ao WhatsApp" ao lado esquerdo do "X" de fechar e encaminhar à página inicial da APP.
 
 Isso será uma experiencia muito mais integrada ao Whatsapp que é nossa intenção, pois o cliente recebe sempre o link através de seu WhatsApp e entao ao terminar o chat no WhatsAi, poderá continar fechando "X" e ser encaminhado APP ou voltar direto pro seu Whatsapp novamente.
+
+### Imagem do Avatar
+
+A imagem de avatar não está sendo salva no perfil do usuário administrador comum nem do Super.... Verifiar de o chat do administrador comum mostra o seu avatar... no do super administrador mostra.
