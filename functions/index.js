@@ -21,60 +21,31 @@ exports.onChatSessionCreated = onDocumentCreated(
     const sessionId = event.params.sessionId;
     const { adminId, anonymousVisitorId } = sessionData;
 
-    // Lógica encapsulada para enviar a mensagem de boas-vindas da IA
     const sendWelcomeMessage = async () => {
-      if (!adminId) {
-        console.log(`[Welcome] No adminId for session ${sessionId}, skipping.`);
-        return;
-      }
-
-      // Delay de 3 segundos para humanizar a interação
+      if (!adminId) return;
       await new Promise(resolve => setTimeout(resolve, 3000));
-
       const messagesRef = db.collection(`chatSessions/${sessionId}/messages`);
       const messagesSnapshot = await messagesRef.limit(1).get();
-      if (!messagesSnapshot.empty) {
-        console.log(`[Welcome] Session ${sessionId} already has messages, skipping.`);
-        return;
-      }
-
+      if (!messagesSnapshot.empty) return;
       try {
         const adminUserDoc = await db.doc(`users/${adminId}`).get();
         const knowledgeBase = adminUserDoc.data()?.aiPrompt || "";
-        // A instrução global já é pega pela IA, focamos no prompt específico
         const systemInstruction = knowledgeBase;
-
-        const chat = model.startChat({
-            systemInstruction: { parts: [{ text: systemInstruction }] }
-        });
-
-        // Prompt simples para a IA iniciar a conversa
+        const chat = model.startChat({ systemInstruction: { parts: [{ text: systemInstruction }] } });
         const welcomePrompt = "Inicie a conversa com uma saudação de boas-vindas. Apresente-se brevemente com base na sua personalidade e pergunte como pode ajudar.";
         const result = await chat.sendMessage(welcomePrompt);
         const response = await result.response;
         const aiResponseText = response.text().trim();
-
         if (aiResponseText) {
-          await messagesRef.add({
-            content: aiResponseText,
-            role: 'assistant',
-            senderId: 'ai_assistant',
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
-            read: false,
-          });
-          console.log(`[Welcome] AI Welcome message sent for session ${sessionId}.`);
+          await messagesRef.add({ content: aiResponseText, role: 'assistant', senderId: 'ai_assistant', timestamp: admin.firestore.FieldValue.serverTimestamp(), read: false });
         }
       } catch (error) {
         console.error(`[Welcome] Error sending AI welcome message for ${sessionId}:`, error);
       }
     };
 
-    // Lógica encapsulada para pré-identificar o contato
     const preIdentifyContact = async () => {
-      if (!anonymousVisitorId) {
-        console.log(`[Identify] No anonymousVisitorId for session ${sessionId}, skipping.`);
-        return;
-      }
+      if (!anonymousVisitorId) return;
       try {
         const querySnapshot = await db.collection('contacts').where('anonymousVisitorIds', 'array-contains', anonymousVisitorId).limit(1).get();
         if (querySnapshot.empty) return;
@@ -83,19 +54,17 @@ exports.onChatSessionCreated = onDocumentCreated(
           probableContactId: contactDoc.id,
           visitorName: `Provavelmente ${contactDoc.data().name}`
         });
-        console.log(`[Identify] Pre-identified contact ${contactDoc.id} for session ${sessionId}.`);
       } catch (error) {
         console.error(`[Identify] Error in pre-identification for session ${sessionId}:`, error);
       }
     };
 
-    // Executa ambas as lógicas em paralelo para não bloquear uma à outra
     await Promise.all([sendWelcomeMessage(), preIdentifyContact()]);
   }
 );
 
 exports.onNewVisitorMessage = onDocumentCreated(
-  { document: "chatSessions/{sessionId}/messages/{messageId}", region: "southamerica-east1", secrets: ["GEMINI_API_KEY"] },
+  { document: "chatSessions/{sessionId}/messages/{messageId}", region: "southamerica-east1", secrets: ["GEMINI_API_KEY", "APP_URL"] },
   async (event) => {
     const snap = event.data;
     if (!snap) return;
@@ -105,7 +74,6 @@ exports.onNewVisitorMessage = onDocumentCreated(
     const sessionId = event.params.sessionId;
     const sessionRef = db.doc(`chatSessions/${sessionId}`);
 
-    // --- LÓGICA DE NOTIFICAÇÃO ---
     try {
       const sessionDoc = await sessionRef.get();
       if (!sessionDoc.exists) return;
@@ -119,15 +87,20 @@ exports.onNewVisitorMessage = onDocumentCreated(
 
       if (fcmTokens && Array.isArray(fcmTokens) && fcmTokens.length > 0) {
         const visitorName = sessionData.visitorName || 'Visitante Anônimo';
+        // **LÓGICA DINÂMICA DA URL**
+        const appUrl = sessionData.originDomain || process.env.APP_URL || 'https://whatss-ai.web.app';
+        
         const payload = {
           notification: {
             title: `Nova mensagem de ${visitorName}`,
             body: newMessage.content,
-            icon: '/favicon.ico',
           },
           webpush: {
-            fcm_options: {
-              link: `/admin/live-chat?chatId=${sessionId}`
+            notification: {
+              icon: `${appUrl}/favicon.ico`,
+            },
+            fcmOptions: {
+              link: `${appUrl}/admin/live-chat?chatId=${sessionId}`
             }
           }
         };
@@ -151,9 +124,7 @@ exports.onNewVisitorMessage = onDocumentCreated(
     } catch (error) {
       console.error("Erro ao enviar notificação:", error);
     }
-    // --- FIM DA LÓGICA DE NOTIFICAÇÃO ---
 
-    // --- LÓGICA DE PROCESSAMENTO DA IA ---
     try {
       await db.runTransaction(async (t) => {
         const sessionDoc = await t.get(sessionRef);

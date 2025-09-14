@@ -66,7 +66,6 @@ export default function ChatClient({ adminUid }: ChatClientProps) {
       try {
         const sessionDoc = await getDoc(sessionRef);
         if (sessionDoc.exists()) {
-          console.log("Sessão já existente encontrada.");
           return path;
         }
       } catch (error: any) {
@@ -74,26 +73,29 @@ export default function ChatClient({ adminUid }: ChatClientProps) {
       }
 
       const sessionData: any = {
-        id: sessionId, adminId: adminUid, visitorUid: userId, status: 'open', createdAt: Timestamp.now(), 
-        lastMessage: 'Sessão iniciada.', lastMessageTimestamp: Timestamp.now(), unreadCount: 0,
+        id: sessionId, 
+        adminId: adminUid, 
+        visitorUid: userId, 
+        status: 'open', 
+        createdAt: Timestamp.now(), 
+        lastMessage: 'Sessão iniciada.', 
+        lastMessageTimestamp: Timestamp.now(), 
+        unreadCount: 0,
+        originDomain: typeof window !== "undefined" ? window.location.origin : '' // **NOVA LINHA**
       };
 
       if (anonymousVisitorId) {
         sessionData.anonymousVisitorId = anonymousVisitorId;
-        console.log(`✅ Incluindo anonymousVisitorId na nova sessão: ${anonymousVisitorId}`);
       }
 
       for (let attempt = 1; attempt <= 5; attempt++) {
         try {
           await setDoc(sessionRef, sessionData);
-          console.log(`✅ Sessão criada com sucesso na tentativa ${attempt}`);
           return path;
         } catch (err: any) {
           if (err.code === 'permission-denied' && attempt < 5) {
-            console.warn(`Tentativa ${attempt} falhou. Tentando novamente em ${300 * attempt}ms...`);
             await new Promise(res => setTimeout(res, 300 * attempt));
           } else {
-            console.error("Erro crítico ao CRIAR sessão (setDoc):", err);
             throw err;
           }
         }
@@ -103,66 +105,46 @@ export default function ChatClient({ adminUid }: ChatClientProps) {
 
     const initialize = async () => {
       try {
-        console.log("=== INICIANDO CHAT ===");
-        if (authLoading) {
-          console.log("Aguardando auth...");
-          return;
-        }
+        if (authLoading) return;
         const services = getFirebaseInstances();
         setFirebase(services);
         const { db, auth } = services;
 
         if (authUser && authUser.id === adminUid) {
-          console.log("✅ Modo preview ativado para admin.");
           setIsPreview(true);
           setInitializing(false);
           return;
         }
 
+        const profileDocRef = doc(db, 'public_profiles', adminUid);
+        const profileDocSnap = await getDoc(profileDocRef);
+
+        if (!profileDocSnap.exists()) {
+          throw new Error("ADMIN_PROFILE_NOT_FOUND");
+        }
+        setAdminProfile(profileDocSnap.data() as PublicProfile);
+
         let effectiveUser = auth.currentUser;
         if (!effectiveUser) {
-          console.log("🔐 Nenhum usuário na sessão. Tentando login anônimo...");
-          try {
-            const userCredential = await signInAnonymously(auth);
-            effectiveUser = userCredential.user;
-            console.log("✅ Login anônimo OK. UID:", effectiveUser.uid);
-            console.log("⏳ Aguardando propagação da autenticação (800ms)...");
-            await new Promise(resolve => setTimeout(resolve, 800));
-          } catch (authError: any) {
-            console.error("❌ Erro no login anônimo:", authError);
-            throw new Error(`Login anônimo falhou: ${authError.code}`);
-          }
-        } else {
-          console.log(`✅ Usuário já existente na sessão. UID: ${effectiveUser.uid}`);
+          const userCredential = await signInAnonymously(auth);
+          effectiveUser = userCredential.user;
+          await new Promise(resolve => setTimeout(resolve, 800));
         }
 
         if (!effectiveUser) throw new Error("Falha crítica: Nenhum usuário válido após tentativas.");
         setCurrentUserId(effectiveUser.uid);
-        console.log("👤 User ID definido no estado:", effectiveUser.uid);
         
-        const profileDocRef = doc(db, 'public_profiles', adminUid);
-        const profileDocSnap = await getDoc(profileDocRef);
-        setAdminProfile(profileDocSnap.exists() ? profileDocSnap.data() as PublicProfile : { 
-          displayName: 'Assistente', greeting: 'Como posso ajudar?', avatarUrl: '', ownerId: adminUid 
-        });
-        console.log("👤 Perfil do Admin carregado.");
-
-        console.log("🔍 Verificando ID de visitante no localStorage...");
         const anonymousVisitorId = localStorage.getItem(VISITOR_ID_KEY);
-        if (anonymousVisitorId) {
-            console.log(`👍 ID de visitante encontrado: ${anonymousVisitorId}`);
-        } else {
-            console.log("🤷‍♂️ Nenhum ID de visitante encontrado.");
-        }
-
-        console.log("🚀 Tentando criar ou obter a sessão de chat...");
+        
         const newSessionPath = await createSessionWithRetry(db, effectiveUser.uid, anonymousVisitorId);
         setSessionPath(newSessionPath);
-        console.log("✅ Caminho da sessão definido:", newSessionPath);
 
       } catch (err: any) {
-        console.error("💥 ERRO CRÍTICO NO FLUXO DE INICIALIZAÇÃO:", err);
-        setError(`Falha: ${err.code || 'erro desconhecido'}. Por favor, recarregue a página.`);
+        if (err.message === "ADMIN_PROFILE_NOT_FOUND") {
+          setError("Este link de chat é inválido ou o administrador ainda não configurou o seu perfil.");
+        } else {
+          setError(`Ocorreu uma falha ao iniciar o chat. Por favor, recarregue a página.`);
+        }
       } finally {
         setInitializing(false);
       }
