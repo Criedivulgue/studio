@@ -18,6 +18,8 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 
+const VISITOR_ID_KEY = 'plataforma_visitor_id';
+
 interface FirebaseServices {
   db: any;
   auth: any;
@@ -47,7 +49,7 @@ export default function ChatClient({ adminUid }: ChatClientProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const createSessionWithRetry = async (db: any, userId: string) => {
+    const createSessionWithRetry = async (db: any, userId: string, anonymousVisitorId: string | null) => {
       const sessionId = `session_${adminUid}_${userId}`;
       const path = `chatSessions/${sessionId}`;
       const sessionRef = doc(db, path);
@@ -62,10 +64,15 @@ export default function ChatClient({ adminUid }: ChatClientProps) {
         console.warn(`Aviso ao verificar sessão existente (isto pode ser normal): ${error.code}`);
       }
 
-      const sessionData = {
+      const sessionData: any = {
         id: sessionId, adminId: adminUid, visitorUid: userId, status: 'open', createdAt: Timestamp.now(), 
         lastMessage: 'Sessão iniciada.', lastMessageTimestamp: Timestamp.now(), unreadCount: 0,
       };
+
+      if (anonymousVisitorId) {
+        sessionData.anonymousVisitorId = anonymousVisitorId;
+        console.log(`✅ Incluindo anonymousVisitorId na nova sessão: ${anonymousVisitorId}`);
+      }
 
       for (let attempt = 1; attempt <= 5; attempt++) {
         try {
@@ -131,8 +138,16 @@ export default function ChatClient({ adminUid }: ChatClientProps) {
         });
         console.log("👤 Perfil do Admin carregado.");
 
+        console.log("🔍 Verificando ID de visitante no localStorage...");
+        const anonymousVisitorId = localStorage.getItem(VISITOR_ID_KEY);
+        if (anonymousVisitorId) {
+            console.log(`👍 ID de visitante encontrado: ${anonymousVisitorId}`);
+        } else {
+            console.log("🤷‍♂️ Nenhum ID de visitante encontrado.");
+        }
+
         console.log("🚀 Tentando criar ou obter a sessão de chat...");
-        const newSessionPath = await createSessionWithRetry(db, effectiveUser.uid);
+        const newSessionPath = await createSessionWithRetry(db, effectiveUser.uid, anonymousVisitorId);
         setSessionPath(newSessionPath);
         console.log("✅ Caminho da sessão definido:", newSessionPath);
 
@@ -144,8 +159,7 @@ export default function ChatClient({ adminUid }: ChatClientProps) {
       }
     };
     ensureFirebaseInitialized().then(() => initialize());
-  }, [authUser, authLoading, adminUid]);
-
+  }, [authUser, authLoading, adminUid, router]);
 
   useEffect(() => {
     if (!sessionPath || !firebase) return;

@@ -59,6 +59,8 @@ export interface Contact {
   canal?: string;
   group?: string;
   avatar?: string;
+  // MODIFICAÇÃO: Array de IDs de visitante anônimos associados a este contato
+  anonymousVisitorIds?: string[];
 }
 
 export interface NewContactPayload {
@@ -101,9 +103,12 @@ export interface ChatSession {
   createdAt: Timestamp;
   lastMessage?: string;
   lastMessageTimestamp?: Timestamp;
+  aiEnabled?: boolean;
   // Optional info captured from the visitor
   visitorName?: string;
   visitorEmail?: string;
+  // MODIFICAÇÃO: ID do contato pré-identificado pelo sistema
+  probableContactId?: string; 
 }
 
 /**
@@ -119,6 +124,7 @@ export interface Conversation {
   lastMessage: string;
   lastMessageTimestamp: Timestamp;
   unreadCount: number;
+  aiEnabled?: boolean;
   
   // ERROR FIX: Denormalized contact info for efficient display
   contactName: string;

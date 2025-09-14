@@ -9,8 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-// MODIFICAÇÃO: Importado o ícone ArrowLeft para o botão de voltar no mobile
-import { Send, MoreVertical, Sparkles, Trash2, Loader2, MessageSquare, Archive, UserPlus, Users, ArrowLeft } from 'lucide-react';
+import { Send, MoreVertical, Sparkles, Trash2, Loader2, MessageSquare, Archive, UserPlus, Users, ArrowLeft, ZapOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -57,6 +56,7 @@ export function Chat({ user }: { user: PlatformUser }) {
     initFirebase();
   }, [toast]);
 
+  // Efeito para carregar os chats (identificados e anônimos)
   useEffect(() => {
     if (!adminId || !db) {
       if (db) setLoading(false);
@@ -77,6 +77,12 @@ export function Chat({ user }: { user: PlatformUser }) {
     const convosQuery = query(collection(db, "conversations"), where("adminId", "==", adminId), orderBy('lastMessageTimestamp', 'desc'));
     const unsubscribeConvos = onSnapshot(convosQuery, (snapshot) => {
       const convos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Conversation));
+      if (selectedChat) {
+          const updatedChat = convos.find(c => c.id === selectedChat.id);
+          if (updatedChat) {
+              setSelectedChat({ ...updatedChat, type: 'CONVERSATION' });
+          }
+      }
       setIdentifiedChats(convos.filter(c => c.status !== 'archived'));
       setLoading(false);
     }, (error) => {
@@ -88,7 +94,8 @@ export function Chat({ user }: { user: PlatformUser }) {
       unsubscribeSessions();
       unsubscribeConvos();
     };
-  }, [adminId, db, toast]);
+  }, [adminId, db, toast, selectedChat]);
+
 
   useEffect(() => {
     if (!selectedChat || !db) {
@@ -194,19 +201,34 @@ export function Chat({ user }: { user: PlatformUser }) {
       setIsProcessing(false);
     }
   }
+  
+  const handleToggleAI = async () => {
+    if (!selectedChat || !functions) return;
+    setIsProcessing(true);
+    try {
+      const toggleAIChat = httpsCallable(functions, 'toggleAIChat');
+      const result = await toggleAIChat({ chatId: selectedChat.id, chatType: selectedChat.type });
+      const newState = (result.data as { newState: boolean }).newState;
+      toast({ title: 'Sucesso', description: `IA ${newState ? 'ativada' : 'desativada'} para este chat.` });
+    } catch (error) {
+      console.error("Error toggling AI:", error);
+      toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível alterar o estado da IA.' });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   const handleIdentifyModalOpen = () => {
       if (selectedChat?.type === 'SESSION') setIdentifyModalOpen(true);
   }
   
   const isLoading = loading || !db || !functions;
+  const isAIEnabled = selectedChat?.aiEnabled !== false;
 
   return (
     <>
-      {/* MODIFICAÇÃO: Adicionado `overflow-hidden` para garantir que o container principal controle o layout */}
       <div className="flex h-[calc(100vh-120px)] border rounded-lg bg-card text-card-foreground overflow-hidden">
         
-        {/* MODIFICAÇÃO: Classes de responsividade para mostrar/esconder a lista de chats */}
         <aside className={cn(
           "h-full flex flex-col border-r",
           selectedChat ? "hidden md:flex md:w-1/3 lg:w-1/4" : "w-full md:flex md:w-1/3 lg:w-1/4"
@@ -228,7 +250,6 @@ export function Chat({ user }: { user: PlatformUser }) {
           </ScrollArea>
         </aside>
 
-        {/* MODIFICAÇÃO: Classes de responsividade para mostrar/esconder a janela de conversa */}
         <main className={cn(
           "h-full flex-1 flex-col",
           selectedChat ? "flex" : "hidden md:flex"
@@ -237,7 +258,6 @@ export function Chat({ user }: { user: PlatformUser }) {
             <>
               <div className="p-4 border-b flex items-center justify-between gap-4">
                 <div className="flex items-center gap-2 truncate">
-                  {/* MODIFICAÇÃO: Botão para voltar à lista de chats em telas pequenas */}
                   <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setSelectedChat(null)}>
                       <ArrowLeft className="h-5 w-5" />
                   </Button>
@@ -246,6 +266,11 @@ export function Chat({ user }: { user: PlatformUser }) {
                 </div>
                 <Popover><PopoverTrigger asChild><Button variant="ghost" size="icon" disabled={isProcessing}><MoreVertical/></Button></PopoverTrigger>
                   <PopoverContent className="w-56"><div className="grid gap-1">
+                    <Button variant="ghost" className="w-full justify-start" onClick={handleToggleAI} disabled={isProcessing}>
+                      {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (isAIEnabled ? <ZapOff className="mr-2 h-4 w-4" /> : <Sparkles className="mr-2 h-4 w-4" />)}
+                      {isAIEnabled ? 'Desativar IA' : 'Ativar IA'}
+                    </Button>
+                    <Separator className="my-1" />
                     {selectedChat.type === 'CONVERSATION' ? (
                       <>
                         <Button variant="ghost" className="w-full justify-start" onClick={handleArchiveConversation} disabled={isProcessing}>{isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Archive className="mr-2 h-4 w-4" />}Arquivar</Button>
@@ -253,7 +278,10 @@ export function Chat({ user }: { user: PlatformUser }) {
                         <Button variant="ghost" className="w-full justify-start text-destructive hover:text-destructive" onClick={() => setShowDeleteDialog(true)} disabled={isProcessing}><Trash2 className="mr-2 h-4 w-4"/>Deletar</Button>
                       </>
                     ) : (
-                      <Button variant="ghost" className="w-full justify-start" onClick={handleIdentifyModalOpen} disabled={isProcessing}><UserPlus className="mr-2 h-4 w-4"/>Identificar Lead</Button>
+                      // MODIFICAÇÃO: Botão para abrir o modal de identificar/conectar
+                      <Button variant="ghost" className="w-full justify-start" onClick={handleIdentifyModalOpen} disabled={isProcessing}>
+                          <UserPlus className="mr-2 h-4 w-4"/>Identificar / Conectar
+                      </Button>
                     )}
                   </div></PopoverContent>
                 </Popover>
@@ -264,6 +292,7 @@ export function Chat({ user }: { user: PlatformUser }) {
           ) : (<div className="flex flex-col items-center justify-center h-full text-muted-foreground bg-background/50"><MessageSquare className="h-12 w-12 mb-4"/><p className="text-lg">Selecione uma conversa</p><p className="text-sm mt-2">Seus chats ativos aparecerão aqui.</p></div>)}
         </main>
       </div>
+      {/* MODIFICAÇÃO: Passa a sessão selecionada (se for do tipo SESSION) para o modal */}
       {selectedChat?.type === 'SESSION' && <LeadIdentificationModal isOpen={isIdentifyModalOpen} onClose={() => setIdentifyModalOpen(false)} adminId={adminId} session={selectedChat} />}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
