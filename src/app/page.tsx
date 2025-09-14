@@ -74,7 +74,7 @@ export default function Home() {
                 Bem Vindo(a)
               </h1>
               <p className="text-lg md:text-xl text-muted-foreground mb-8">
-                Atendimento Inteligente Especialista. Use no WhatsApp!
+                O Complemento para seu WhatsApp Profissional
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 {isChatDisabled ? (
@@ -100,9 +100,9 @@ export default function Home() {
         <section className="py-20 md:py-28 bg-background">
           <div className="container mx-auto px-4 md:px-6">
             <div className="text-center max-w-2xl mx-auto mb-12">
-              <h2 className="text-3xl md:text-4xl font-headline font-bold">A Resposta Inteligente e Humanizada</h2>
+              <h2 className="text-3xl md:text-4xl font-headline font-bold">A Resposta Humana e Inteligente!</h2>
               <p className="text-muted-foreground mt-4">
-                Converse a partir de uma base de informações poderosas, sem perder o compromisso e responsabilidade de seu atendimento.
+                O WhatsAI transforma o WhatsApp de uma ferramenta de mensagens caótica em um canal de negócios organizado, inteligente e proativo
               </p>
             </div>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
