@@ -1,9 +1,13 @@
+'use client';
+
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import { getFirestore, Firestore } from "firebase/firestore";
 import { getAuth, Auth } from "firebase/auth";
 import { getStorage, FirebaseStorage } from "firebase/storage";
 import { getDatabase, Database } from "firebase/database";
 import { getFunctions, Functions } from "firebase/functions";
+// 1. IMPORTAR getMessaging e Messaging
+import { getMessaging, Messaging } from "firebase/messaging";
 
 let app: FirebaseApp;
 let auth: Auth;
@@ -11,9 +15,13 @@ let db: Firestore;
 let storage: FirebaseStorage;
 let rtdb: Database;
 let functions: Functions;
+// 2. DECLARAR a variável de messaging
+let messaging: Messaging | null = null; // Inicia como nulo
+
+let firebaseInitialized = false;
 
 const initializeFirebase = async () => {
-  if (getApps().length) {
+  if (firebaseInitialized) {
     return;
   }
 
@@ -25,37 +33,51 @@ const initializeFirebase = async () => {
     }
     const firebaseConfig = await response.json();
 
-    if (!firebaseConfig.apiKey) {
-        throw new Error('Configuração do Firebase inválida recebida da API.');
+    if (!getApps().length) {
+      app = initializeApp(firebaseConfig);
+    } else {
+      app = getApp();
     }
 
-    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+    storage = getStorage(app);
+    rtdb = getDatabase(app);
+    functions = getFunctions(app);
+
+    // 3. INICIALIZAR o messaging apenas no navegador
+    if (typeof window !== 'undefined') {
+      messaging = getMessaging(app);
+    }
     
+    firebaseInitialized = true;
   } catch (error) {
-    console.error("ERRO CRÍTICO: Falha ao inicializar o Firebase.", error);
+    console.error("Erro detalhado ao inicializar o Firebase:", error);
+    // Propaga o erro para que os hooks saibam que a inicialização falhou
     throw error;
   }
 };
 
-let firebaseInitializationPromise: Promise<void> | null = null;
-
-export const ensureFirebaseInitialized = () => {
-  if (!firebaseInitializationPromise) {
-    firebaseInitializationPromise = initializeFirebase();
+// Hook para garantir que a inicialização seja concluída
+export const ensureFirebaseInitialized = async () => {
+  if (!firebaseInitialized) {
+    await initializeFirebase();
   }
-  return firebaseInitializationPromise;
 };
 
+// Retorna todas as instâncias inicializadas
 export const getFirebaseInstances = () => {
-    if (!app) {
-        throw new Error("Tentativa de usar o Firebase antes da conclusão da inicialização.");
-    }
-    
-    if (!db) db = getFirestore(app);
-    if (!auth) auth = getAuth(app);
-    if (!storage) storage = getStorage(app);
-    if (!rtdb) rtdb = getDatabase(app);
-    if (!functions) functions = getFunctions(app, 'southamerica-east1');
-    
-    return { app, db, auth, storage, rtdb, functions };
-}
+  if (!firebaseInitialized) {
+    throw new Error("Firebase não foi inicializado. Chame ensureFirebaseInitialized() primeiro.");
+  }
+  return {
+    app,
+    db,
+    auth,
+    storage,
+    rtdb,
+    functions,
+    // 4. RETORNAR a instância de messaging
+    messaging,
+  };
+};

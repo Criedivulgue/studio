@@ -32,6 +32,7 @@ import { Logo } from '@/components/logo';
 
 // Este componente de layout é o "guardião" de toda a área do Super Admin.
 export default function SuperAdminLayout({ children }: { children: React.ReactNode }) {
+  console.log('--- SUPER ADMIN LAYOUT RENDERED --- Este log DEVE aparecer.');
   useFirebaseMessaging();
   const { toast } = useToast();
   // A chamada ao useAuth() obtém o estado de autenticação atual.

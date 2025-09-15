@@ -1,35 +1,43 @@
+'use client';
 
 import { useState, useEffect } from 'react';
-import { getMessaging, getToken, onMessage } from 'firebase/messaging';
-import { doc, setDoc, arrayUnion } from 'firebase/firestore'; // Importa arrayUnion
-import { ensureFirebaseInitialized, getFirebaseInstances } from '@/lib/firebase'; 
+import { getMessaging, getToken, onMessage, Messaging } from 'firebase/messaging';
+import { doc, setDoc, arrayUnion } from 'firebase/firestore';
+import { ensureFirebaseInitialized, getFirebaseInstances } from '@/lib/firebase';
 import { useAuth } from './use-auth';
 
 const VAPID_KEY = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
 
 export function useFirebaseMessaging() {
   const { user } = useAuth();
-  const [messaging, setMessaging] = useState(null);
-  const [notificationPermission, setNotificationPermission] = useState(null);
+  const [messaging, setMessaging] = useState<Messaging | null>(null);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | null>(null);
 
   useEffect(() => {
     const initializeFirebase = async () => {
-      await ensureFirebaseInitialized();
-      const { messaging: firebaseMessaging } = getFirebaseInstances();
-      setMessaging(firebaseMessaging);
-      if (typeof window !== 'undefined' && 'Notification' in window) {
-        setNotificationPermission(Notification.permission);
+      try {
+        await ensureFirebaseInitialized();
+        const { messaging: firebaseMessaging } = getFirebaseInstances();
+        setMessaging(firebaseMessaging);
+        if (typeof window !== 'undefined' && 'Notification' in window) {
+          setNotificationPermission(Notification.permission);
+        }
+      } catch (error) {
+        console.error("[useFirebaseMessaging] Erro na inicialização do Firebase:", error);
       }
     };
 
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
       initializeFirebase();
+    } else {
+        console.log("[useFirebaseMessaging] Service Worker não é suportado neste navegador.");
     }
   }, []);
 
   useEffect(() => {
-    if (!messaging || !user || !user.uid) {
-      return; 
+    // A condição de guarda agora verifica explicitamente a propriedade 'uid'
+    if (!messaging || !user || !('uid' in user)) {
+      return;
     }
 
     const requestPermissionAndGetToken = async () => {
@@ -40,23 +48,26 @@ export function useFirebaseMessaging() {
           permission = await Notification.requestPermission();
           setNotificationPermission(permission);
         }
-        
+
         if (permission === 'granted') {
+          // TypeScript agora sabe que user.uid é seguro para acessar aqui
           console.log('Obtendo token FCM para o usuário:', user.uid);
           const currentToken = await getToken(messaging, { vapidKey: VAPID_KEY });
 
           if (currentToken) {
             console.log('Token FCM obtido:', currentToken);
-            const { db } = getFirebaseInstances(); 
+            const { db } = getFirebaseInstances();
+            // E aqui também
             const userDocRef = doc(db, 'users', user.uid);
-            
-            // CORREÇÃO: Usa arrayUnion para adicionar o token ao array 'fcmTokens'
+
             await setDoc(userDocRef, { fcmTokens: arrayUnion(currentToken) }, { merge: true });
-            
-            console.log('Token FCM salvo/atualizado no Firestore no formato de array.');
+
+            console.log('Token FCM salvo/atualizado no Firestore.');
           } else {
             console.log('Não foi possível obter o token FCM.');
           }
+        } else {
+            console.log(`Permissão de notificação não concedida: ${permission}`);
         }
       } catch (error) {
         console.error('Erro ao obter token FCM:', error);

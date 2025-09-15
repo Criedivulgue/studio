@@ -22,13 +22,11 @@ importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js'
 
 // 2. Função de inicialização UNIFICADA E SEGURA
 const initializeFirebase = async () => {
-  // CORREÇÃO: Usar o namespace firebase.app
   if (firebase.app.getApps().length > 0) {
     return firebase.app.getApp();
   }
 
   try {
-    // Busca a configuração da nossa API segura, assim como o app principal faz.
     const response = await fetch('/api/firebase-config');
     if (!response.ok) {
       throw new Error('Falha ao buscar a configuração do Firebase no Service Worker.');
@@ -36,7 +34,6 @@ const initializeFirebase = async () => {
     const firebaseConfig = await response.json();
     
     console.log('Service Worker: Configuração recebida, inicializando o Firebase...');
-    // CORREÇÃO: Usar o namespace firebase.app
     return firebase.app.initializeApp(firebaseConfig);
 
   } catch (error) {
@@ -47,7 +44,6 @@ const initializeFirebase = async () => {
 
 // 3. Função para configurar o manipulador de mensagens em segundo plano
 const setupBackgroundMessageHandler = async () => {
-    // Garante que o Firebase esteja inicializado
     const app = await initializeFirebase();
     if (!app) {
         console.log("Service Worker: Falha na inicialização do Firebase, o manipulador de mensagens não será configurado.");
@@ -55,24 +51,59 @@ const setupBackgroundMessageHandler = async () => {
     }
 
     console.log("Service Worker: Firebase inicializado, configurando o manipulador de mensagens em segundo plano.");
-    // CORREÇÃO: Usar o namespace firebase.messaging
     const messaging = firebase.messaging.getMessaging(app);
 
-    // CORREÇÃO: Usar o namespace firebase.messaging
     firebase.messaging.onBackgroundMessage(messaging, (payload) => {
         console.log('[firebase-messaging-sw.js] Mensagem recebida em segundo plano: ', payload);
 
-        // Extrai o título e as opções da notificação
         const notificationTitle = payload.notification?.title || 'Nova Mensagem';
         const notificationOptions = {
             body: payload.notification?.body || '',
-            icon: payload.notification?.icon || '/favicon.ico'
+            icon: payload.notification?.icon || '/favicon.ico',
+            // CORREÇÃO: Armazena a URL do campo 'data' na própria notificação
+            data: { 
+              url: payload.data?.url || '/' 
+            }
         };
 
-        // Exibe a notificação para o usuário
         self.registration.showNotification(notificationTitle, notificationOptions);
     });
 }
+
+// 4. CORREÇÃO: Adiciona o event listener para o clique na notificação
+self.addEventListener('notificationclick', (event) => {
+  console.log('[Service Worker] Notificação clicada!');
+  
+  // Fecha a notificação que foi clicada
+  event.notification.close();
+
+  // Obtém a URL que foi armazenada no campo 'data'
+  const urlToOpen = event.notification.data.url;
+
+  // Abre a URL em uma nova aba ou foca em uma já existente
+  event.waitUntil(
+    clients.matchAll({
+      type: 'window',
+      includeUncontrolled: true
+    }).then((clientList) => {
+      // Se uma janela com a mesma URL já estiver aberta, foque nela.
+      for (const client of clientList) {
+        // Extrai o pathname para comparar, ignorando a origem
+        const clientPath = new URL(client.url).pathname;
+        const targetPath = new URL(urlToOpen, self.location.origin).pathname;
+
+        if (clientPath === targetPath && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      // Se nenhuma janela correspondente for encontrada, abra uma nova.
+      if (clients.openWindow) {
+        return clients.openWindow(urlToOpen);
+      }
+    })
+  );
+});
+
 
 // Inicia a configuração do manipulador de mensagens
 setupBackgroundMessageHandler();

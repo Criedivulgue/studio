@@ -128,6 +128,7 @@ export default function ChatClient({ adminUid }: ChatClientProps) {
         if (!effectiveUser) {
           const userCredential = await signInAnonymously(auth);
           effectiveUser = userCredential.user;
+          localStorage.setItem(VISITOR_ID_KEY, effectiveUser.uid);
           await new Promise(resolve => setTimeout(resolve, 800));
         }
 
